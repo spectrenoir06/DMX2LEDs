@@ -1,16 +1,26 @@
 #include <Arduino.h>
 // #include <SparkFunDMX.h>
 #include <WS2812FX.h>
-// #include "ESP32_RMT_Driver.h"
+#include "ESP32_RMT_Driver.h"
 #include <dmx.h>
-
 
 #define LED_COUNT 600
 #define LED_PIN 25
 
-#define INCA_2
+// #define INCA_2
 
 #define TOTAL_CHANNELS 512
+
+int ledPin_0 = 12;    // BUE
+int ledPin_1 = 13;    // GREEN
+int ledPin_2 = 5;     // RED
+
+const int freq = 200000;
+const int resolution = 8;
+
+const int channel_red   = 2;
+const int channel_green = 1;
+const int channel_blue  = 0;
 
 #define DMX_OFF 0
 // #define DMX_CHANNEL_ON        (DMX_OFF + 0)
@@ -28,15 +38,17 @@
 #define DMX_CHANNEL_MODE_4    (DMX_OFF + 11)
 
 // SparkFunDMX dmx;
-WS2812FX ws2812fx = WS2812FX(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800, 20, 20);
+WS2812FX ws2812fx    = WS2812FX(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800, 20, 20);
+WS2812FX ws2812fx_p  = WS2812FX(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800, 1, 1);
+
 
 uint32_t color_1 = 0xFF0000;
-uint16_t speed = 2000;
+uint16_t speed = 0;
 
-#ifdef INCA_1
-	#define RAY_1  0, 0,  25
-	#define RAY_2  1, 27, 52
-	#define RAY_3  2, 54, 79
+#if defined(INCA_1)
+	#define RAY_1  0, 0,  24
+	#define RAY_2  1, 27, 51
+	#define RAY_3  2, 54, 78
 
 	#define EYE_C  3,   79, 111 // third eye
 	#define TOP    4,  112, 212 // tete
@@ -47,9 +59,9 @@ uint16_t speed = 2000;
 	#define NOSE   9,  397, 461 // nose
 	#define MOUTH  10, 462, 512 // mouth
 
-	#define RAY_4  11, 514, 539 
-	#define RAY_5  12, 540, 565
-	#define RAY_6  13, 566, 591
+	#define RAY_4  11, 513, 538 
+	#define RAY_5  12, 539, 564
+	#define RAY_6  13, 565, 590
 
 #elif defined(INCA_2)
 	#define RAY_1  0, 0,  25
@@ -68,6 +80,25 @@ uint16_t speed = 2000;
 	#define RAY_4  11, 501-1, 526-1 
 	#define RAY_5  12, 527-1, 552-1
 	#define RAY_6  13, 553-1, 578-1
+
+#elif defined(INCA_3)
+	#define RAY_1  0, 0,  25
+	#define RAY_2  1, 25, 50
+	#define RAY_3  2, 51, 76
+
+	#define EYE_C  3,  78-1, 111-1    // third eye
+	#define TOP    4, 112-1, 205-1  // tete
+	#define APP    5, 206-1, 209-1 // aprendice
+	#define EYE_R  6, 210-1, 256-1 // eye right
+	#define BOTTOM 7, 257-1, 341-1 // bottom  
+	#define EYE_L  8, 342-1, 387-1 // eye left
+	#define NOSE   9, 388-1, 447-1 // nose
+	#define MOUTH 10, 448-1, 500-1 // mouth
+
+	#define RAY_4  11, 501-1, 526-1 
+	#define RAY_5  12, 527-1, 552-1
+	#define RAY_6  13, 553-1, 578-1
+
 #endif
 
 
@@ -240,44 +271,34 @@ void eye() {
 }
 
 unsigned long timer = 0; // a timer
-int anim = 1;
+int anim = 0;
 uint8_t bright = 255;
-
-// Custom show functions which will use the RMT hardware to drive the LEDs.
-// Need a separate function for each ws2812fx instance.
-// void myCustomShow1(void) {
-// 	uint8_t* pixels = ws2812fx.getPixels();
-// 	// numBytes is one more then the size of the ws2812fx's *pixels array.
-// 	// the extra byte is used by the driver to insert the LED reset pulse at the end.
-// 	uint16_t numBytes = ws2812fx.getNumBytes() + 1;
-// 	rmt_write_sample(RMT_CHANNEL_0, pixels, numBytes, false); // channel 0
-// }
-
 
 void DMX_task(void* parameter) {
 	// Serial.printf("Task start\n");
 	DMX::Initialize(input);
 	Serial.println("initialized...");
+	wipe();
 
 	for (;;) { // infinite loop
 		if (DMX::IsHealthy())     {
 
-			int new_anim = 0;
+			int new_anim = anim;
 
 			if (DMX::Read(DMX_CHANNEL_STROBE) > 127)
 				new_anim = 6;
 			else if (DMX::Read(DMX_CHANNEL_MODE_0) > 127)
-				new_anim = 1;
+				new_anim = 0;
 			else if (DMX::Read(DMX_CHANNEL_MODE_1) > 127)
-				new_anim = 2;
+				new_anim = 1;
 			else if (DMX::Read(DMX_CHANNEL_MODE_2) > 127)
-				new_anim = 3;
+				new_anim = 2;
 			else if (DMX::Read(DMX_CHANNEL_MODE_3) > 127)
-				new_anim = 4;
+				new_anim = 3;
 			else if (DMX::Read(DMX_CHANNEL_MODE_4) > 127)
 				new_anim = 7;
-			else
-				new_anim = 0;
+			// else
+			// 	new_anim = 0;
 			
 
 			if (new_anim != anim) {
@@ -287,13 +308,13 @@ void DMX_task(void* parameter) {
 				ws2812fx.strip_off();
 				switch (anim) {
 					case 0:
-						hypno();
-						break;
-					case 1:
 						static_anim();
 						break;
-					case 2:
+					case 1:
 						wipe();
+						break;
+					case 2:
+						hypno();
 						break;
 					case 3:
 						TwinkleFade();
@@ -303,15 +324,16 @@ void DMX_task(void* parameter) {
 						break;
 					case 5:
 						test();
-						anim = -1;
-						break;
-					case 7:
-						HyperSparkle();
+						// anim = -1;
 						break;
 					case 6:
 						strobe();
 						break;
+					case 7:
+						HyperSparkle();
+						break;
 				}
+				ws2812fx.setAllSpeed(speed);
 			}
 
 
@@ -324,36 +346,95 @@ void DMX_task(void* parameter) {
 			Serial.printf(", Bright: %d", DMX::Read(DMX_CHANNEL_BRIGHT));
 			if (bright != DMX::Read(DMX_CHANNEL_BRIGHT)) {
 				bright = DMX::Read(DMX_CHANNEL_BRIGHT);
-				ws2812fx.setBrightness(DMX::Read(DMX_CHANNEL_BRIGHT));
+				// ws2812fx.setBrightness(DMX::Read(DMX_CHANNEL_BRIGHT));
 			}
-			speed = DMX::Read(DMX_CHANNEL_SPEED) * 20;
-			ws2812fx.setAllSpeed(speed);
+			int new_speed = DMX::Read(DMX_CHANNEL_SPEED) * 20;
+			if (speed != new_speed) {
+				speed = new_speed;
+				ws2812fx.setAllSpeed(speed);
+			}
 			Serial.printf(", Speed: %d", speed);
+			Serial.printf(", anime = %d", anim);
 			Serial.printf("\n");
+		} else {
+
 		}
 
-		vTaskDelay(100 / portTICK_PERIOD_MS);
+		vTaskDelay(10 / portTICK_PERIOD_MS);
 	}
 }
 
+
+// Custom show functions which will use the RMT hardware to drive the LEDs.
+// Need a separate function for each ws2812fx instance.
+// void myCustomShow1(void) {
+// 	uint8_t* pixels = ws2812fx.getPixels();
+// 	// numBytes is one more then the size of the ws2812fx's *pixels array.
+// 	// the extra byte is used by the driver to insert the LED reset pulse at the end.
+// 	uint16_t numBytes = ws2812fx.getNumBytes() + 1;
+// 	rmt_write_sample(RMT_CHANNEL_0, pixels, numBytes, false); // channel 0
+// }
+
+#ifdef INCA_3
+	void myCustomShow(void) {
+		uint8_t* pixels_v1 = ws2812fx.getPixels();
+		// uint8_t* pixels_p = ws2812fx_p.getPixels();
+
+		// for (int i = 0; i < ws2812fx_p.getNumBytes(); i++) {
+		// 	uint32_t p = pixels_v1[i];
+		// 	p = (p * bright) >> 8;
+		// 	pixels_p[i] = p;
+		// }
+
+		// uint32_t c = ws2812fx.getColor();
+		ledcWrite(channel_red,   (pixels_v1[77*3 + 1] * bright) >> 8);
+		ledcWrite(channel_green, (pixels_v1[77*3 + 0] * bright) >> 8);
+		ledcWrite(channel_blue,  (pixels_v1[77*3 + 2] * bright) >> 8);
+		// ws2812fx_p.Adafruit_NeoPixel::show();
+	}
+#else
+	void myCustomShow(void) {
+		uint8_t* pixels_v1 = ws2812fx.getPixels();
+		uint8_t* pixels_p = ws2812fx_p.getPixels();
+
+		for (int i = 0; i < ws2812fx_p.getNumBytes(); i++) {
+			uint32_t p = pixels_v1[i];
+			p = (p * bright) >> 8;
+			pixels_p[i] = p;
+		}
+		// uint8_t* pixels = ws2812fx.getPixels();
+		// numBytes is one more then the size of the ws2812fx's *pixels array.
+		// the extra byte is used by the driver to insert the LED reset pulse at the end.
+		// uint16_t numBytes = ws2812fx.getNumBytes() + 1;
+		// rmt_write_sample(RMT_CHANNEL_0, pixels_p, numBytes, false); // channel 0
+		ws2812fx_p.Adafruit_NeoPixel::show();
+	}
+#endif
+
+
 void led_task(void* parameter) {
+	ws2812fx_p.init();
+
 	ws2812fx.init();
 	ws2812fx.setBrightness(255);
 	ws2812fx.start();
+
+	#ifdef INCA_3
+		ledcSetup(0, freq, resolution);
+		ledcSetup(1, freq, resolution);
+		ledcSetup(2, freq, resolution);
+		ledcAttachPin(ledPin_0, channel_blue);
+		ledcAttachPin(ledPin_1, channel_green);
+		ledcAttachPin(ledPin_2, channel_red);
+	#endif
+	#if defined (INCA_1) || defined (INCA_2)
+		rmt_tx_int(RMT_CHANNEL_0, ws2812fx.getPin()); // assign ws2812fx1 to RMT channel 0
+	#endif
+	ws2812fx.setCustomShow(myCustomShow); // set the custom show function to forgo the NeoPixel
+
 	for (;;) {
 		ws2812fx.service();
-
-
-		// unsigned long now = millis();
-		// if ((now - timer) > 5000) { // every 10 seconds
-		// 	Serial.println(anim);
-		// 	ws2812fx.resetSegments();
-		// 	ws2812fx.strip_off();
-		// 	chang_anim();
-		// 	timer = now;
-		// 	anim++;
-		// }
-	vTaskDelay(1 / portTICK_PERIOD_MS);
+		vTaskDelay(1 / portTICK_PERIOD_MS);
 	}
 }
 
@@ -361,30 +442,28 @@ void led_task(void* parameter) {
 void setup() {
 	Serial.begin(115200);
 	Serial.printf("Start\n");
-	// rmt_tx_int(RMT_CHANNEL_0, ws2812fx.getPin()); // assign ws2812fx1 to RMT channel 0
-	// ws2812fx.setCustomShow(myCustomShow1); // set the custom show function to forgo the NeoPixel
-
 
 	// test();
-	hypno();
+	// hypno();
+	// rainbow();
 
 	xTaskCreatePinnedToCore(
 		led_task,    // Function that should be called
 		"led_task",   // Name of the task (for debugging)
 		10000,            // Stack size (bytes)
 		NULL,            // Parameter to pass
-		2,               // Task priority
+		1,               // Task priority
 		NULL,             // Task handle
-		1          // Core you want to run the task on (0 or 1)
+		0          // Core you want to run the task on (0 or 1)
 	);
 	xTaskCreatePinnedToCore(
 		DMX_task,    // Function that should be called
 		"DMX_task",   // Name of the task (for debugging)
-		15000,            // Stack size (bytes)
+		10000,            // Stack size (bytes)
 		NULL,            // Parameter to pass
 		1,               // Task priority
 		NULL,             // Task handle
-		0          // Core you want to run the task on (0 or 1)
+		1          // Core you want to run the task on (0 or 1)
 	);
 }
 
