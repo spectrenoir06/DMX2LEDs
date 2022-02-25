@@ -1,13 +1,20 @@
 #include <Arduino.h>
-// #include <SparkFunDMX.h>
+
 #include <WS2812FX.h>
-#include "ESP32_RMT_Driver.h"
 #include <dmx.h>
 
-#define LED_COUNT 600
-#define LED_PIN 25
+// #include <WiFi.h>
+// #include <AsyncTCP.h>
+// #include <ESPAsyncWebServer.h>
+// #include <AsyncElegantOTA.h>
 
-// #define INCA_2
+#ifdef LOGO
+	#define LED_COUNT 144
+#else
+	#define LED_COUNT 600
+#endif
+
+#define LED_PIN 25
 
 #define TOTAL_CHANNELS 512
 
@@ -23,31 +30,39 @@ const int channel_green = 1;
 const int channel_blue  = 0;
 
 #define DMX_OFF 0
-#define DMX_CHANNEL_BRIGHT    (DMX_OFF + 1)
-#define DMX_CHANNEL_COLOR_1_R (DMX_OFF + 2)
-#define DMX_CHANNEL_COLOR_1_G (DMX_OFF + 3)
-#define DMX_CHANNEL_COLOR_1_B (DMX_OFF + 4)
-#define DMX_CHANNEL_SPEED     (DMX_OFF + 5)
-#define DMX_CHANNEL_STROBE    (DMX_OFF + 6)
+#define DMX_CHANNEL_COLOR_1_R (DMX_OFF + 1)
+#define DMX_CHANNEL_COLOR_1_G (DMX_OFF + 2)
+#define DMX_CHANNEL_COLOR_1_B (DMX_OFF + 3)
+#define DMX_CHANNEL_SPEED     (DMX_OFF + 4)
+#define DMX_CHANNEL_STROBE    (DMX_OFF + 5)
 
-#define DMX_CHANNEL_MODE_0    (DMX_OFF + 7)
-#define DMX_CHANNEL_MODE_1    (DMX_OFF + 8)
-#define DMX_CHANNEL_MODE_2    (DMX_OFF + 9)
-#define DMX_CHANNEL_MODE_3    (DMX_OFF + 10)
-#define DMX_CHANNEL_MODE_4    (DMX_OFF + 11)
+#define DMX_CHANNEL_MODE_0    (DMX_OFF + 6)
+#define DMX_CHANNEL_MODE_1    (DMX_OFF + 7)
+#define DMX_CHANNEL_MODE_2    (DMX_OFF + 8)
+#define DMX_CHANNEL_MODE_3    (DMX_OFF + 9)
+#define DMX_CHANNEL_MODE_4    (DMX_OFF + 10)
+#define DMX_CHANNEL_MODE_5    (DMX_OFF + 11)
+#define DMX_CHANNEL_MODE_6    (DMX_OFF + 12)
+#define DMX_CHANNEL_MODE_7    (DMX_OFF + 13)
+#define DMX_CHANNEL_MODE_8    (DMX_OFF + 14)
+#define DMX_CHANNEL_MODE_9    (DMX_OFF + 15)
+#define DMX_CHANNEL_MODE_10   (DMX_OFF + 16)
+
+
 
 // SparkFunDMX dmx;
 WS2812FX ws2812fx    = WS2812FX(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800, 20, 20);
 WS2812FX ws2812fx_p  = WS2812FX(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800, 1, 1);
 
+// AsyncWebServer server(80);
 
 uint32_t color_1 = 0xFF0000;
-uint16_t speed = 0;
+uint32_t speed = 0;
 
 #if defined(INCA_1)
-	#define RAY_1  0, 0,  24
-	#define RAY_2  1, 27, 51
-	#define RAY_3  2, 54, 78
+	#define RAY_1  0, 0,  23
+	#define RAY_2  1, 27, 50
+	#define RAY_3  2, 54, 77
 
 	#define EYE_C  3,   79, 111 // third eye
 	#define TOP    4,  112, 212 // tete
@@ -98,175 +113,381 @@ uint16_t speed = 0;
 	#define RAY_5  12, 527-1, 552-1
 	#define RAY_6  13, 553-1, 578-1
 
+#elif defined(LOGO)
+	#define RAY_1  0, 1, 143
+
+#elif defined(trendy_1)
+	#define RAY_1  0, 1, 500
 #endif
 
 
-void TwinkleFade() {
-	ws2812fx.setSegment(RAY_1, FX_MODE_TWINKLE_FADE);
-	ws2812fx.setSegment(RAY_2, FX_MODE_TWINKLE_FADE);
-	ws2812fx.setSegment(RAY_3, FX_MODE_TWINKLE_FADE);
+void firework() {
+	#if defined(LOGO)
+		ws2812fx.setSegment(RAY_1, FX_MODE_FIREWORKS);
+	#elif defined(INCA_3)
+		ws2812fx.setSegment(EYE_C, FX_MODE_STATIC);
+	#else
+		ws2812fx.setSegment(RAY_1, FX_MODE_FIREWORKS);
+		ws2812fx.setSegment(RAY_2, FX_MODE_FIREWORKS);
+		ws2812fx.setSegment(RAY_3, FX_MODE_FIREWORKS);
 
-	ws2812fx.setSegment(EYE_C, FX_MODE_TWINKLE_FADE);
-	ws2812fx.setSegment(TOP, FX_MODE_TWINKLE_FADE);
-	ws2812fx.setSegment(APP, FX_MODE_TWINKLE_FADE);
-	ws2812fx.setSegment(EYE_R, FX_MODE_TWINKLE_FADE);
-	ws2812fx.setSegment(BOTTOM, FX_MODE_TWINKLE_FADE);
-	ws2812fx.setSegment(EYE_L, FX_MODE_TWINKLE_FADE);
-	ws2812fx.setSegment(NOSE, FX_MODE_TWINKLE_FADE);
-	ws2812fx.setSegment(MOUTH, FX_MODE_TWINKLE_FADE);
+		ws2812fx.setSegment(EYE_C, FX_MODE_FIREWORKS);
+		ws2812fx.setSegment(TOP, FX_MODE_FIREWORKS);
+		ws2812fx.setSegment(APP, FX_MODE_FIREWORKS);
+		ws2812fx.setSegment(EYE_R, FX_MODE_FIREWORKS);
+		ws2812fx.setSegment(BOTTOM, FX_MODE_FIREWORKS);
+		ws2812fx.setSegment(EYE_L, FX_MODE_FIREWORKS);
+		ws2812fx.setSegment(NOSE, FX_MODE_FIREWORKS);
+		ws2812fx.setSegment(MOUTH, FX_MODE_FIREWORKS);
 
-	ws2812fx.setSegment(RAY_4, FX_MODE_TWINKLE_FADE);
-	ws2812fx.setSegment(RAY_5, FX_MODE_TWINKLE_FADE);
-	ws2812fx.setSegment(RAY_6, FX_MODE_TWINKLE_FADE);
+		ws2812fx.setSegment(RAY_4, FX_MODE_FIREWORKS);
+		ws2812fx.setSegment(RAY_5, FX_MODE_FIREWORKS);
+		ws2812fx.setSegment(RAY_6, FX_MODE_FIREWORKS);
+	#endif
+}
+
+void firework_rainbow() {
+	#if defined(LOGO)
+		ws2812fx.setSegment(RAY_1, FX_MODE_FIREWORKS_RANDOM);
+	#elif defined(INCA_3)
+		ws2812fx.setSegment(EYE_C, FX_MODE_STATIC);
+	#else
+		ws2812fx.setSegment(RAY_1, FX_MODE_FIREWORKS_RANDOM);
+		ws2812fx.setSegment(RAY_2, FX_MODE_FIREWORKS_RANDOM);
+		ws2812fx.setSegment(RAY_3, FX_MODE_FIREWORKS_RANDOM);
+
+		ws2812fx.setSegment(EYE_C, FX_MODE_FIREWORKS_RANDOM);
+		ws2812fx.setSegment(TOP, FX_MODE_FIREWORKS_RANDOM);
+		ws2812fx.setSegment(APP, FX_MODE_FIREWORKS_RANDOM);
+		ws2812fx.setSegment(EYE_R, FX_MODE_FIREWORKS_RANDOM);
+		ws2812fx.setSegment(BOTTOM, FX_MODE_FIREWORKS_RANDOM);
+		ws2812fx.setSegment(EYE_L, FX_MODE_FIREWORKS_RANDOM);
+		ws2812fx.setSegment(NOSE, FX_MODE_FIREWORKS_RANDOM);
+		ws2812fx.setSegment(MOUTH, FX_MODE_FIREWORKS_RANDOM);
+
+		ws2812fx.setSegment(RAY_4, FX_MODE_FIREWORKS_RANDOM);
+		ws2812fx.setSegment(RAY_5, FX_MODE_FIREWORKS_RANDOM);
+		ws2812fx.setSegment(RAY_6, FX_MODE_FIREWORKS_RANDOM);
+	#endif
 }
 
 void HyperSparkle() {
-	ws2812fx.setSegment(RAY_1, FX_MODE_HYPER_SPARKLE);
-	ws2812fx.setSegment(RAY_2, FX_MODE_HYPER_SPARKLE);
-	ws2812fx.setSegment(RAY_3, FX_MODE_HYPER_SPARKLE);
+	#if defined(LOGO)
+		ws2812fx.setSegment(RAY_1, FX_MODE_HYPER_SPARKLE);
+	#elif defined(INCA_3)
+		ws2812fx.setSegment(EYE_C, FX_MODE_STATIC);
+	#else
+		ws2812fx.setSegment(RAY_1, FX_MODE_HYPER_SPARKLE);
+		ws2812fx.setSegment(RAY_2, FX_MODE_HYPER_SPARKLE);
+		ws2812fx.setSegment(RAY_3, FX_MODE_HYPER_SPARKLE);
 
-	ws2812fx.setSegment(EYE_C, FX_MODE_HYPER_SPARKLE);
-	ws2812fx.setSegment(TOP, FX_MODE_HYPER_SPARKLE);
-	ws2812fx.setSegment(APP, FX_MODE_HYPER_SPARKLE);
-	ws2812fx.setSegment(EYE_R, FX_MODE_HYPER_SPARKLE);
-	ws2812fx.setSegment(BOTTOM, FX_MODE_HYPER_SPARKLE);
-	ws2812fx.setSegment(EYE_L, FX_MODE_HYPER_SPARKLE);
-	ws2812fx.setSegment(NOSE, FX_MODE_HYPER_SPARKLE);
-	ws2812fx.setSegment(MOUTH, FX_MODE_HYPER_SPARKLE);
+		ws2812fx.setSegment(EYE_C, FX_MODE_HYPER_SPARKLE);
+		ws2812fx.setSegment(TOP, FX_MODE_HYPER_SPARKLE);
+		ws2812fx.setSegment(APP, FX_MODE_HYPER_SPARKLE);
+		ws2812fx.setSegment(EYE_R, FX_MODE_HYPER_SPARKLE);
+		ws2812fx.setSegment(BOTTOM, FX_MODE_HYPER_SPARKLE);
+		ws2812fx.setSegment(EYE_L, FX_MODE_HYPER_SPARKLE);
+		ws2812fx.setSegment(NOSE, FX_MODE_HYPER_SPARKLE);
+		ws2812fx.setSegment(MOUTH, FX_MODE_HYPER_SPARKLE);
 
-	ws2812fx.setSegment(RAY_4, FX_MODE_HYPER_SPARKLE);
-	ws2812fx.setSegment(RAY_5, FX_MODE_HYPER_SPARKLE);
-	ws2812fx.setSegment(RAY_6, FX_MODE_HYPER_SPARKLE);
+		ws2812fx.setSegment(RAY_4, FX_MODE_HYPER_SPARKLE);
+		ws2812fx.setSegment(RAY_5, FX_MODE_HYPER_SPARKLE);
+		ws2812fx.setSegment(RAY_6, FX_MODE_HYPER_SPARKLE);
+	#endif
 }
 
 void test() {
-	ws2812fx.setSegment(RAY_1,  FX_MODE_STATIC, RED);
-	ws2812fx.setSegment(RAY_2,  FX_MODE_STATIC, GREEN);
-	ws2812fx.setSegment(RAY_3,  FX_MODE_STATIC, BLUE);
+	#if defined(LOGO)
+	#else
+		ws2812fx.setSegment(RAY_1,  FX_MODE_STATIC, RED);
+		ws2812fx.setSegment(RAY_2,  FX_MODE_STATIC, GREEN);
+		ws2812fx.setSegment(RAY_3,  FX_MODE_STATIC, BLUE);
 
-	ws2812fx.setSegment(EYE_C,  FX_MODE_STATIC, YELLOW);
-	ws2812fx.setSegment(TOP,    FX_MODE_STATIC, MAGENTA);
-	ws2812fx.setSegment(APP,    FX_MODE_STATIC, CYAN);
-	ws2812fx.setSegment(EYE_R,  FX_MODE_STATIC, RED);
-	ws2812fx.setSegment(BOTTOM, FX_MODE_STATIC, GREEN);
-	ws2812fx.setSegment(EYE_L,  FX_MODE_STATIC, BLUE);
-	ws2812fx.setSegment(NOSE,   FX_MODE_STATIC, YELLOW);
-	ws2812fx.setSegment(MOUTH,  FX_MODE_STATIC, MAGENTA);
-	
-	ws2812fx.setSegment(RAY_4,  FX_MODE_STATIC, RED);
-	ws2812fx.setSegment(RAY_5,  FX_MODE_STATIC, GREEN);
-	ws2812fx.setSegment(RAY_6,  FX_MODE_STATIC, BLUE);
+		ws2812fx.setSegment(EYE_C,  FX_MODE_STATIC, YELLOW);
+		ws2812fx.setSegment(TOP,    FX_MODE_STATIC, MAGENTA);
+		ws2812fx.setSegment(APP,    FX_MODE_STATIC, CYAN);
+		ws2812fx.setSegment(EYE_R,  FX_MODE_STATIC, RED);
+		ws2812fx.setSegment(BOTTOM, FX_MODE_STATIC, GREEN);
+		ws2812fx.setSegment(EYE_L,  FX_MODE_STATIC, BLUE);
+		ws2812fx.setSegment(NOSE,   FX_MODE_STATIC, YELLOW);
+		ws2812fx.setSegment(MOUTH,  FX_MODE_STATIC, MAGENTA);
+		
+		ws2812fx.setSegment(RAY_4,  FX_MODE_STATIC, RED);
+		ws2812fx.setSegment(RAY_5,  FX_MODE_STATIC, GREEN);
+		ws2812fx.setSegment(RAY_6,  FX_MODE_STATIC, BLUE);
+	#endif
 }
 
 void strobe() {
-	ws2812fx.setSegment(RAY_1, FX_MODE_BLINK, WHITE, 200);
-	ws2812fx.setSegment(RAY_2, FX_MODE_BLINK, WHITE, 200);
-	ws2812fx.setSegment(RAY_3, FX_MODE_BLINK, WHITE, 200);
+	#if defined(LOGO)
+		ws2812fx.setSegment(RAY_1, FX_MODE_BLINK, WHITE, 200);
+	#else
+		ws2812fx.setSegment(RAY_1, FX_MODE_BLINK, WHITE, 200);
+		ws2812fx.setSegment(RAY_2, FX_MODE_BLINK, WHITE, 200);
+		ws2812fx.setSegment(RAY_3, FX_MODE_BLINK, WHITE, 200);
 
-	ws2812fx.setSegment(EYE_C, FX_MODE_BLINK, WHITE, 200);
-	ws2812fx.setSegment(TOP, FX_MODE_BLINK, WHITE, 200);
-	ws2812fx.setSegment(APP, FX_MODE_BLINK, WHITE, 200);
-	ws2812fx.setSegment(EYE_R, FX_MODE_BLINK, WHITE, 200);
-	ws2812fx.setSegment(BOTTOM, FX_MODE_BLINK, WHITE, 200);
-	ws2812fx.setSegment(EYE_L, FX_MODE_BLINK, WHITE, 200);
-	ws2812fx.setSegment(NOSE, FX_MODE_BLINK, WHITE, 200);
-	ws2812fx.setSegment(MOUTH, FX_MODE_BLINK, WHITE, 200);
+		ws2812fx.setSegment(EYE_C, FX_MODE_BLINK, WHITE, 200);
+		ws2812fx.setSegment(TOP, FX_MODE_BLINK, WHITE, 200);
+		ws2812fx.setSegment(APP, FX_MODE_BLINK, WHITE, 200);
+		ws2812fx.setSegment(EYE_R, FX_MODE_BLINK, WHITE, 200);
+		ws2812fx.setSegment(BOTTOM, FX_MODE_BLINK, WHITE, 200);
+		ws2812fx.setSegment(EYE_L, FX_MODE_BLINK, WHITE, 200);
+		ws2812fx.setSegment(NOSE, FX_MODE_BLINK, WHITE, 200);
+		ws2812fx.setSegment(MOUTH, FX_MODE_BLINK, WHITE, 200);
 
-	ws2812fx.setSegment(RAY_4, FX_MODE_BLINK, WHITE, 200);
-	ws2812fx.setSegment(RAY_5, FX_MODE_BLINK, WHITE, 200);
-	ws2812fx.setSegment(RAY_6, FX_MODE_BLINK, WHITE, 200);
+		ws2812fx.setSegment(RAY_4, FX_MODE_BLINK, WHITE, 200);
+		ws2812fx.setSegment(RAY_5, FX_MODE_BLINK, WHITE, 200);
+		ws2812fx.setSegment(RAY_6, FX_MODE_BLINK, WHITE, 200);
+	#endif
 }
 
 void static_anim() {
-	ws2812fx.setSegment(RAY_1, FX_MODE_STATIC);
-	ws2812fx.setSegment(RAY_2, FX_MODE_STATIC);
-	ws2812fx.setSegment(RAY_3, FX_MODE_STATIC);
+	#if defined(LOGO)
+		ws2812fx.setSegment(RAY_1, FX_MODE_STATIC);
+	#else
+		ws2812fx.setSegment(RAY_1, FX_MODE_STATIC);
+		ws2812fx.setSegment(RAY_2, FX_MODE_STATIC);
+		ws2812fx.setSegment(RAY_3, FX_MODE_STATIC);
 
-	ws2812fx.setSegment(EYE_C, FX_MODE_STATIC);
-	ws2812fx.setSegment(TOP, FX_MODE_STATIC);
-	ws2812fx.setSegment(APP, FX_MODE_STATIC);
-	ws2812fx.setSegment(EYE_R, FX_MODE_STATIC);
-	ws2812fx.setSegment(BOTTOM, FX_MODE_STATIC);
-	ws2812fx.setSegment(EYE_L, FX_MODE_STATIC);
-	ws2812fx.setSegment(NOSE, FX_MODE_STATIC);
-	ws2812fx.setSegment(MOUTH, FX_MODE_STATIC);
+		ws2812fx.setSegment(EYE_C, FX_MODE_STATIC);
+		ws2812fx.setSegment(TOP, FX_MODE_STATIC);
+		ws2812fx.setSegment(APP, FX_MODE_STATIC);
+		ws2812fx.setSegment(EYE_R, FX_MODE_STATIC);
+		ws2812fx.setSegment(BOTTOM, FX_MODE_STATIC);
+		ws2812fx.setSegment(EYE_L, FX_MODE_STATIC);
+		ws2812fx.setSegment(NOSE, FX_MODE_STATIC);
+		ws2812fx.setSegment(MOUTH, FX_MODE_STATIC);
 
-	ws2812fx.setSegment(RAY_4, FX_MODE_STATIC);
-	ws2812fx.setSegment(RAY_5, FX_MODE_STATIC);
-	ws2812fx.setSegment(RAY_6, FX_MODE_STATIC);
+		ws2812fx.setSegment(RAY_4, FX_MODE_STATIC);
+		ws2812fx.setSegment(RAY_5, FX_MODE_STATIC);
+		ws2812fx.setSegment(RAY_6, FX_MODE_STATIC);
+	#endif
 }
 
 void hypno() {
-	ws2812fx.setSegment(RAY_1, FX_MODE_THEATER_CHASE, color_1, 50);
-	ws2812fx.setSegment(RAY_2, FX_MODE_THEATER_CHASE, color_1, 50);
-	ws2812fx.setSegment(RAY_3, FX_MODE_THEATER_CHASE, color_1, 50);
+	#if defined(LOGO)
+		ws2812fx.setSegment(RAY_1, FX_MODE_THEATER_CHASE, color_1, 50);
+	#elif defined(INCA_3)
+		ws2812fx.setSegment(EYE_C, FX_MODE_STATIC);
+	#else
+		ws2812fx.setSegment(RAY_1, FX_MODE_THEATER_CHASE, color_1, 50);
+		ws2812fx.setSegment(RAY_2, FX_MODE_THEATER_CHASE, color_1, 50);
+		ws2812fx.setSegment(RAY_3, FX_MODE_THEATER_CHASE, color_1, 50);
 
-	ws2812fx.setSegment(RAY_4, FX_MODE_THEATER_CHASE, color_1, 50);
-	ws2812fx.setSegment(RAY_5, FX_MODE_THEATER_CHASE, color_1, 50);
-	ws2812fx.setSegment(RAY_6, FX_MODE_THEATER_CHASE, color_1, 50);
+		ws2812fx.setSegment(RAY_4, FX_MODE_THEATER_CHASE, color_1, 50);
+		ws2812fx.setSegment(RAY_5, FX_MODE_THEATER_CHASE, color_1, 50);
+		ws2812fx.setSegment(RAY_6, FX_MODE_THEATER_CHASE, color_1, 50);
 
-	ws2812fx.setSegment(EYE_C, FX_MODE_THEATER_CHASE, color_1, 50);
-	ws2812fx.setSegment(EYE_L, FX_MODE_THEATER_CHASE, color_1, 50);
-	ws2812fx.setSegment(EYE_R, FX_MODE_THEATER_CHASE, color_1, 50);
-	ws2812fx.setSegment(MOUTH, FX_MODE_THEATER_CHASE, color_1, 50);
+		ws2812fx.setSegment(EYE_C, FX_MODE_THEATER_CHASE, color_1, 50);
+		ws2812fx.setSegment(EYE_L, FX_MODE_THEATER_CHASE, color_1, 50);
+		ws2812fx.setSegment(EYE_R, FX_MODE_THEATER_CHASE, color_1, 50);
+		ws2812fx.setSegment(MOUTH, FX_MODE_THEATER_CHASE, color_1, 50);
+	#endif	
 }
 
 void wipe() {
-	ws2812fx.setSegment(RAY_1, FX_MODE_COLOR_WIPE, color_1, 3000);
-	ws2812fx.setSegment(RAY_2, FX_MODE_COLOR_WIPE, color_1, 3000);
-	ws2812fx.setSegment(RAY_3, FX_MODE_COLOR_WIPE, color_1, 3000);
+	#if defined(LOGO)
+		ws2812fx.setSegment(RAY_1, FX_MODE_COLOR_WIPE, color_1, 3000);
+	#elif defined(INCA_3)
+		ws2812fx.setSegment(EYE_C, FX_MODE_STATIC);
+	#else
+		ws2812fx.setSegment(RAY_1, FX_MODE_COLOR_WIPE, color_1, 3000);
+		ws2812fx.setSegment(RAY_2, FX_MODE_COLOR_WIPE, color_1, 3000);
+		ws2812fx.setSegment(RAY_3, FX_MODE_COLOR_WIPE, color_1, 3000);
 
-	ws2812fx.setSegment(RAY_4, FX_MODE_COLOR_WIPE, color_1, 3000);
-	ws2812fx.setSegment(RAY_5, FX_MODE_COLOR_WIPE, color_1, 3000);
-	ws2812fx.setSegment(RAY_6, FX_MODE_COLOR_WIPE, color_1, 3000);
+		ws2812fx.setSegment(RAY_4, FX_MODE_COLOR_WIPE, color_1, 3000);
+		ws2812fx.setSegment(RAY_5, FX_MODE_COLOR_WIPE, color_1, 3000);
+		ws2812fx.setSegment(RAY_6, FX_MODE_COLOR_WIPE, color_1, 3000);
 
-	ws2812fx.setSegment(EYE_C,  FX_MODE_FADE);
-	ws2812fx.setSegment(TOP,    FX_MODE_FADE);
-	ws2812fx.setSegment(APP,    FX_MODE_FADE);
-	ws2812fx.setSegment(EYE_R,  FX_MODE_FADE);
-	ws2812fx.setSegment(BOTTOM, FX_MODE_FADE);
-	ws2812fx.setSegment(EYE_L,  FX_MODE_FADE);
-	ws2812fx.setSegment(NOSE,   FX_MODE_FADE);
-	ws2812fx.setSegment(MOUTH,  FX_MODE_FADE);
+		ws2812fx.setSegment(EYE_C,  FX_MODE_FADE);
+		ws2812fx.setSegment(TOP,    FX_MODE_FADE);
+		ws2812fx.setSegment(APP,    FX_MODE_FADE);
+		ws2812fx.setSegment(EYE_R,  FX_MODE_FADE);
+		ws2812fx.setSegment(BOTTOM, FX_MODE_FADE);
+		ws2812fx.setSegment(EYE_L,  FX_MODE_FADE);
+		ws2812fx.setSegment(NOSE,   FX_MODE_FADE);
+		ws2812fx.setSegment(MOUTH,  FX_MODE_FADE);
+	#endif
 }
 
 void rainbow() {
-	ws2812fx.setSegment(EYE_C, FX_MODE_RAINBOW, color_1, 100);
-	ws2812fx.setSegment(EYE_L, FX_MODE_RAINBOW, color_1, 100);
-	ws2812fx.setSegment(EYE_R, FX_MODE_RAINBOW, color_1, 100);
-	ws2812fx.setSegment(MOUTH, FX_MODE_RAINBOW);
+	#if defined(LOGO)
+		ws2812fx.setSegment(RAY_1, FX_MODE_RAINBOW, color_1, 100);
+	#elif defined(INCA_3)
+		ws2812fx.setSegment(EYE_C, FX_MODE_STATIC);
+	#else
+		ws2812fx.setSegment(EYE_C, FX_MODE_RAINBOW, color_1, 100);
+		ws2812fx.setSegment(EYE_L, FX_MODE_RAINBOW, color_1, 100);
+		ws2812fx.setSegment(EYE_R, FX_MODE_RAINBOW, color_1, 100);
+		ws2812fx.setSegment(MOUTH, FX_MODE_RAINBOW);
 
-	ws2812fx.setSegment(TOP,    FX_MODE_RAINBOW, color_1, 300);
-	ws2812fx.setSegment(BOTTOM, FX_MODE_RAINBOW, color_1, 300);
-	ws2812fx.setSegment(NOSE,   FX_MODE_RAINBOW, color_1, 300);
+		ws2812fx.setSegment(TOP,    FX_MODE_RAINBOW, color_1, 300);
+		ws2812fx.setSegment(BOTTOM, FX_MODE_RAINBOW, color_1, 300);
+		ws2812fx.setSegment(NOSE,   FX_MODE_RAINBOW, color_1, 300);
 
-	ws2812fx.setSegment(RAY_1, FX_MODE_RAINBOW, color_1, 10);
-	ws2812fx.setSegment(RAY_2, FX_MODE_RAINBOW, color_1, 10);
-	ws2812fx.setSegment(RAY_3, FX_MODE_RAINBOW, color_1, 10);
+		ws2812fx.setSegment(RAY_1, FX_MODE_RAINBOW, color_1, 10);
+		ws2812fx.setSegment(RAY_2, FX_MODE_RAINBOW, color_1, 10);
+		ws2812fx.setSegment(RAY_3, FX_MODE_RAINBOW, color_1, 10);
 
-	ws2812fx.setSegment(RAY_4, FX_MODE_RAINBOW, color_1, 10);
-	ws2812fx.setSegment(RAY_5, FX_MODE_RAINBOW, color_1, 10);
-	ws2812fx.setSegment(RAY_6, FX_MODE_RAINBOW, color_1, 10);
+		ws2812fx.setSegment(RAY_4, FX_MODE_RAINBOW, color_1, 10);
+		ws2812fx.setSegment(RAY_5, FX_MODE_RAINBOW, color_1, 10);
+		ws2812fx.setSegment(RAY_6, FX_MODE_RAINBOW, color_1, 10);
+	#endif
 }
 
 void outline() {
-	ws2812fx.setSegment(TOP,    FX_MODE_RAINBOW_CYCLE);
-	ws2812fx.setSegment(BOTTOM, FX_MODE_RAINBOW_CYCLE);  
-	ws2812fx.setSegment(NOSE,   FX_MODE_RAINBOW_CYCLE);
+	#if defined(LOGO)
+		ws2812fx.setSegment(RAY_1, FX_MODE_RAINBOW_CYCLE);
+	#elif defined(INCA_3)
+		ws2812fx.setSegment(EYE_C, FX_MODE_STATIC);
+	#else
+		ws2812fx.setSegment(TOP,    FX_MODE_RAINBOW_CYCLE);
+		ws2812fx.setSegment(BOTTOM, FX_MODE_RAINBOW_CYCLE);  
+		ws2812fx.setSegment(NOSE,   FX_MODE_RAINBOW_CYCLE);
+	#endif
 }
 
-void eye() {
-	ws2812fx.setSegment(EYE_L, FX_MODE_BLINK, color_1, 50);
-	ws2812fx.setSegment(EYE_R, FX_MODE_BLINK, color_1, 50);
-	ws2812fx.setSegment(EYE_C, FX_MODE_BLINK, color_1, 50);
+void strobe_color() {
+	#if defined(LOGO)
+		ws2812fx.setSegment(RAY_1, FX_MODE_BLINK, color_1, 200);
+	#else
+		ws2812fx.setSegment(EYE_L, FX_MODE_BLINK, color_1, 200);
+		ws2812fx.setSegment(EYE_R, FX_MODE_BLINK, color_1, 200);
+		ws2812fx.setSegment(EYE_C, FX_MODE_BLINK, color_1, 200);
 
-	ws2812fx.setSegment(RAY_1, FX_MODE_BLINK, color_1, 50);
-	ws2812fx.setSegment(RAY_2, FX_MODE_BLINK, color_1, 50);
-	ws2812fx.setSegment(RAY_3, FX_MODE_BLINK, color_1, 50);
+		ws2812fx.setSegment(RAY_1, FX_MODE_BLINK, color_1, 200);
+		ws2812fx.setSegment(RAY_2, FX_MODE_BLINK, color_1, 200);
+		ws2812fx.setSegment(RAY_3, FX_MODE_BLINK, color_1, 200);
 
-	ws2812fx.setSegment(RAY_4, FX_MODE_BLINK, color_1, 50);
-	ws2812fx.setSegment(RAY_5, FX_MODE_BLINK, color_1, 50);
-	ws2812fx.setSegment(RAY_6, FX_MODE_BLINK, color_1, 50);
+		ws2812fx.setSegment(RAY_4, FX_MODE_BLINK, color_1, 200);
+		ws2812fx.setSegment(RAY_5, FX_MODE_BLINK, color_1, 200);
+		ws2812fx.setSegment(RAY_6, FX_MODE_BLINK, color_1, 200);
+
+		ws2812fx.setSegment(TOP,   FX_MODE_BLINK, color_1, 200);
+		ws2812fx.setSegment(BOTTOM,FX_MODE_BLINK, color_1, 200);
+		ws2812fx.setSegment(NOSE,  FX_MODE_BLINK, color_1, 200);
+	#endif
+}
+
+
+void chase_rainbow() {
+	#if defined(LOGO)
+		ws2812fx.setSegment(RAY_1, FX_MODE_CHASE_RAINBOW);
+	#elif defined(INCA_3)
+		ws2812fx.setSegment(EYE_C, FX_MODE_STATIC);
+	#else
+		ws2812fx.setSegment(EYE_L, FX_MODE_CHASE_RAINBOW);
+		ws2812fx.setSegment(EYE_R, FX_MODE_CHASE_RAINBOW);
+		ws2812fx.setSegment(EYE_C, FX_MODE_CHASE_RAINBOW);
+
+		ws2812fx.setSegment(RAY_1, FX_MODE_CHASE_RAINBOW);
+		ws2812fx.setSegment(RAY_2, FX_MODE_CHASE_RAINBOW);
+		ws2812fx.setSegment(RAY_3, FX_MODE_CHASE_RAINBOW);
+
+		ws2812fx.setSegment(RAY_4, FX_MODE_CHASE_RAINBOW);
+		ws2812fx.setSegment(RAY_5, FX_MODE_CHASE_RAINBOW);
+		ws2812fx.setSegment(RAY_6, FX_MODE_CHASE_RAINBOW);
+
+		ws2812fx.setSegment(TOP, FX_MODE_CHASE_RAINBOW);
+		ws2812fx.setSegment(BOTTOM, FX_MODE_CHASE_RAINBOW);
+		ws2812fx.setSegment(NOSE, FX_MODE_CHASE_RAINBOW);
+	#endif
+}
+
+void running_light() {
+	#if defined(LOGO)
+		ws2812fx.setSegment(RAY_1, FX_MODE_RUNNING_LIGHTS);
+	#elif defined(INCA_3)
+		ws2812fx.setSegment(EYE_C, FX_MODE_STATIC);
+	#else
+		ws2812fx.setSegment(EYE_L, FX_MODE_RUNNING_LIGHTS);
+		ws2812fx.setSegment(EYE_R, FX_MODE_RUNNING_LIGHTS);
+		ws2812fx.setSegment(EYE_C, FX_MODE_RUNNING_LIGHTS);
+
+		ws2812fx.setSegment(RAY_1, FX_MODE_RUNNING_LIGHTS);
+		ws2812fx.setSegment(RAY_2, FX_MODE_RUNNING_LIGHTS);
+		ws2812fx.setSegment(RAY_3, FX_MODE_RUNNING_LIGHTS);
+
+		ws2812fx.setSegment(RAY_4, FX_MODE_RUNNING_LIGHTS);
+		ws2812fx.setSegment(RAY_5, FX_MODE_RUNNING_LIGHTS);
+		ws2812fx.setSegment(RAY_6, FX_MODE_RUNNING_LIGHTS);
+
+		ws2812fx.setSegment(TOP, FX_MODE_RUNNING_LIGHTS);
+		ws2812fx.setSegment(BOTTOM, FX_MODE_RUNNING_LIGHTS);
+		ws2812fx.setSegment(NOSE, FX_MODE_RUNNING_LIGHTS);
+	#endif
+}
+
+void comete() {
+	#if defined(LOGO)
+		ws2812fx.setSegment(RAY_1, FX_MODE_COMET);
+	#elif defined(INCA_3)
+		ws2812fx.setSegment(EYE_C, FX_MODE_STATIC);
+	#else
+		ws2812fx.setSegment(EYE_L, FX_MODE_COMET);
+		ws2812fx.setSegment(EYE_R, FX_MODE_COMET);
+		ws2812fx.setSegment(EYE_C, FX_MODE_COMET);
+
+		ws2812fx.setSegment(RAY_1, FX_MODE_COLOR_WIPE_REV);
+		ws2812fx.setSegment(RAY_2, FX_MODE_COLOR_WIPE_REV);
+		ws2812fx.setSegment(RAY_3, FX_MODE_COLOR_WIPE_REV);
+
+		ws2812fx.setSegment(RAY_4, FX_MODE_COLOR_WIPE_REV);
+		ws2812fx.setSegment(RAY_5, FX_MODE_COLOR_WIPE_REV);
+		ws2812fx.setSegment(RAY_6, FX_MODE_COLOR_WIPE_REV);
+
+		ws2812fx.setSegment(TOP,    FX_MODE_FADE);
+		ws2812fx.setSegment(BOTTOM, FX_MODE_FADE);
+		ws2812fx.setSegment(NOSE,   FX_MODE_FADE);
+	#endif
+}
+
+void TwinkleFOX() {
+	#if defined(LOGO)
+		ws2812fx.setSegment(RAY_1, FX_MODE_TWINKLEFOX);
+	#elif defined(INCA_3)
+		ws2812fx.setSegment(EYE_C, FX_MODE_STATIC);
+	#else
+		ws2812fx.setSegment(EYE_L, FX_MODE_TWINKLEFOX);
+		ws2812fx.setSegment(EYE_R, FX_MODE_TWINKLEFOX);
+		ws2812fx.setSegment(EYE_C, FX_MODE_TWINKLEFOX);
+
+		ws2812fx.setSegment(RAY_1, FX_MODE_TWINKLEFOX);
+		ws2812fx.setSegment(RAY_2, FX_MODE_TWINKLEFOX);
+		ws2812fx.setSegment(RAY_3, FX_MODE_TWINKLEFOX);
+
+		ws2812fx.setSegment(RAY_4, FX_MODE_TWINKLEFOX);
+		ws2812fx.setSegment(RAY_5, FX_MODE_TWINKLEFOX);
+		ws2812fx.setSegment(RAY_6, FX_MODE_TWINKLEFOX);
+
+		ws2812fx.setSegment(TOP, FX_MODE_TWINKLEFOX);
+		ws2812fx.setSegment(BOTTOM, FX_MODE_TWINKLEFOX);
+		ws2812fx.setSegment(NOSE, FX_MODE_TWINKLEFOX);
+	#endif
+}
+
+void fire() {
+	#if defined(LOGO)
+		ws2812fx.setSegment(RAY_1, FX_MODE_TWINKLEFOX);
+	#elif defined(INCA_3)
+		ws2812fx.setSegment(EYE_C, FX_MODE_STATIC);
+	#else
+		ws2812fx.setSegment(EYE_L, FX_MODE_TWINKLEFOX);
+		ws2812fx.setSegment(EYE_R, FX_MODE_TWINKLEFOX);
+		ws2812fx.setSegment(EYE_C, FX_MODE_TWINKLEFOX);
+
+		ws2812fx.setSegment(RAY_1, FX_MODE_CHASE_COLOR);
+		ws2812fx.setSegment(RAY_2, FX_MODE_CHASE_COLOR);
+		ws2812fx.setSegment(RAY_3, FX_MODE_CHASE_COLOR);
+
+		ws2812fx.setSegment(RAY_4, FX_MODE_CHASE_COLOR);
+		ws2812fx.setSegment(RAY_5, FX_MODE_CHASE_COLOR);
+		ws2812fx.setSegment(RAY_6, FX_MODE_CHASE_COLOR);
+
+		ws2812fx.setSegment(TOP, FX_MODE_TWINKLEFOX);
+		ws2812fx.setSegment(BOTTOM, FX_MODE_TWINKLEFOX);
+		ws2812fx.setSegment(NOSE, FX_MODE_TWINKLEFOX);
+	#endif
 }
 
 int anim = 0;
@@ -284,7 +505,7 @@ void DMX_task(void* parameter) {
 			int new_anim = anim;
 
 			if (DMX::Read(DMX_CHANNEL_STROBE) > 127)
-				new_anim = 6;
+				new_anim = 255;
 			else if (DMX::Read(DMX_CHANNEL_MODE_0) > 127)
 				new_anim = 0;
 			else if (DMX::Read(DMX_CHANNEL_MODE_1) > 127)
@@ -294,9 +515,21 @@ void DMX_task(void* parameter) {
 			else if (DMX::Read(DMX_CHANNEL_MODE_3) > 127)
 				new_anim = 3;
 			else if (DMX::Read(DMX_CHANNEL_MODE_4) > 127)
+				new_anim = 4;
+			else if (DMX::Read(DMX_CHANNEL_MODE_5) > 127)
+				new_anim = 5;
+			else if (DMX::Read(DMX_CHANNEL_MODE_6) > 127)
+				new_anim = 6;
+			else if (DMX::Read(DMX_CHANNEL_MODE_7) > 127)
 				new_anim = 7;
+			else if (DMX::Read(DMX_CHANNEL_MODE_8) > 127)
+				new_anim = 8;
+			else if (DMX::Read(DMX_CHANNEL_MODE_9) > 127)
+				new_anim = 9;
+			else if (DMX::Read(DMX_CHANNEL_MODE_10) > 127)
+				new_anim = 10;
 			else
-				new_anim = 0;
+				new_anim = 254;
 			
 
 			if (new_anim != anim) {
@@ -306,7 +539,7 @@ void DMX_task(void* parameter) {
 				ws2812fx.strip_off();
 				switch (anim) {
 					case 0:
-						static_anim();
+						strobe_color();
 						break;
 					case 1:
 						wipe();
@@ -315,48 +548,64 @@ void DMX_task(void* parameter) {
 						hypno();
 						break;
 					case 3:
-						TwinkleFade();
+						firework();
 						break;
 					case 4:
-						eye();
+						running_light();
 						break;
 					case 5:
-						test();
-						// anim = -1;
+						TwinkleFOX();
 						break;
 					case 6:
-						strobe();
+						fire();
 						break;
 					case 7:
-						HyperSparkle();
+						comete();
 						break;
+					case 8:
+						firework_rainbow();
+						break;
+					case 9:
+						chase_rainbow();
+						break;
+					case 255:
+						strobe();
+						break;
+					case 254:
+						static_anim();
+						break;
+					// case 7:
+					// 	HyperSparkle();
+					// 	break;
 				}
 				ws2812fx.setAllSpeed(speed);
 			}
 
-			if (anim != 6) {
+			Serial.printf("Color: %d, %d, %d", DMX::Read(DMX_CHANNEL_COLOR_1_R), DMX::Read(DMX_CHANNEL_COLOR_1_G), DMX::Read(DMX_CHANNEL_COLOR_1_B));
+			if (anim != 255 && anim != 0) {
 				color_1 = ((uint32_t)DMX::Read(DMX_CHANNEL_COLOR_1_R) << 16) | ((uint32_t)DMX::Read(DMX_CHANNEL_COLOR_1_G) << 8) | ((uint32_t)DMX::Read(DMX_CHANNEL_COLOR_1_B));
-				Serial.printf("Color: %d, %d, %d", DMX::Read(DMX_CHANNEL_COLOR_1_R), DMX::Read(DMX_CHANNEL_COLOR_1_G), DMX::Read(DMX_CHANNEL_COLOR_1_B));
 				ws2812fx.setAllColor(color_1);
 			}
 
-			Serial.printf(", Bright: %d", DMX::Read(DMX_CHANNEL_BRIGHT));
-			if (bright != DMX::Read(DMX_CHANNEL_BRIGHT)) {
-				bright = DMX::Read(DMX_CHANNEL_BRIGHT);
-				// ws2812fx.setBrightness(DMX::Read(DMX_CHANNEL_BRIGHT));
-			}
-			int new_speed = DMX::Read(DMX_CHANNEL_SPEED) * 20;
-			if (speed != new_speed) {
-				speed = new_speed;
-				ws2812fx.setAllSpeed(speed);
+			// Serial.printf(", Bright: %d", DMX::Read(DMX_CHANNEL_BRIGHT));
+			// if (bright != DMX::Read(DMX_CHANNEL_BRIGHT)) {
+			// 	bright = DMX::Read(DMX_CHANNEL_BRIGHT);
+			// 	// ws2812fx.setBrightness(DMX::Read(DMX_CHANNEL_BRIGHT));
+			// }
+
+			if (anim == 254) { // static 
+				speed = 0;
+			} else {
+				int new_speed = 2650 - DMX::Read(DMX_CHANNEL_SPEED) * 10;
+				if (speed != new_speed) {
+					speed = new_speed;
+					ws2812fx.setAllSpeed(speed);
+				}
 			}
 			Serial.printf(", Speed: %d", speed);
 			Serial.printf(", anime = %d", anim);
 			Serial.printf("\n");
-		} else {
-
 		}
-
 		vTaskDelay(10 / portTICK_PERIOD_MS);
 	}
 }
@@ -412,6 +661,16 @@ void setup() {
 	Serial.printf("Start\n");
 
 	// test();
+
+	// Serial.println("Setting AP (Access Point)");
+	// WiFi.softAP(AP_SSID, AP_PASSWORD);
+	// IPAddress IP = WiFi.softAPIP();
+	// Serial.print("AP IP address: ");
+	// Serial.println(IP);
+
+	// AsyncElegantOTA.begin(&server);
+	// server.begin();
+	// Serial.println("HTTP server started");
 
 	xTaskCreatePinnedToCore(
 		led_task,    // Function that should be called
