@@ -8,14 +8,6 @@
 // #include <ESPAsyncWebServer.h>
 // #include <AsyncElegantOTA.h>
 
-#ifdef LOGO
-	#define LED_COUNT 144
-#else
-	#define LED_COUNT 600
-#endif
-
-#define LED_PIN 25
-
 #define TOTAL_CHANNELS 512
 
 int ledPin_0 = 12;    // BUE
@@ -29,14 +21,13 @@ const int channel_red   = 2;
 const int channel_green = 1;
 const int channel_blue  = 0;
 
-#define DMX_OFF 0
 #define DMX_CHANNEL_COLOR_1_R (DMX_OFF + 1)
 #define DMX_CHANNEL_COLOR_1_G (DMX_OFF + 2)
 #define DMX_CHANNEL_COLOR_1_B (DMX_OFF + 3)
 #define DMX_CHANNEL_SPEED     (DMX_OFF + 4)
 #define DMX_CHANNEL_STROBE    (DMX_OFF + 5)
+#define DMX_CHANNEL_STROBE_G  (DMX_OFF + 6)
 
-#define DMX_CHANNEL_MODE_0    (DMX_OFF + 6)
 #define DMX_CHANNEL_MODE_1    (DMX_OFF + 7)
 #define DMX_CHANNEL_MODE_2    (DMX_OFF + 8)
 #define DMX_CHANNEL_MODE_3    (DMX_OFF + 9)
@@ -46,18 +37,20 @@ const int channel_blue  = 0;
 #define DMX_CHANNEL_MODE_7    (DMX_OFF + 13)
 #define DMX_CHANNEL_MODE_8    (DMX_OFF + 14)
 #define DMX_CHANNEL_MODE_9    (DMX_OFF + 15)
-#define DMX_CHANNEL_MODE_10   (DMX_OFF + 16)
+
+#define DMX_CHANNEL_BRIGHT    (DMX_OFF + 16)
+#define DMX_CHANNEL_STROBE_SPEED (DMX_OFF + 17)
 
 
-
-// SparkFunDMX dmx;
-WS2812FX ws2812fx    = WS2812FX(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800, 20, 20);
-WS2812FX ws2812fx_p  = WS2812FX(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800, 1, 1);
+WS2812FX ws2812fx    = WS2812FX(LED_COUNT, LED_PIN, LEDS_TYPE, 20, 20);
+WS2812FX ws2812fx_p  = WS2812FX(LED_COUNT, LED_PIN, LEDS_TYPE, 1, 1);
 
 // AsyncWebServer server(80);
 
 uint32_t color_1 = 0xFF0000;
-uint32_t speed = 0;
+int32_t speed = 0;
+int32_t strobe_speed =0;
+uint8_t is_strobe = 0;
 
 #if defined(INCA_1)
 	#define RAY_1  0, 0,  23
@@ -117,12 +110,13 @@ uint32_t speed = 0;
 	#define RAY_1  0, 1, 143
 
 #elif defined(trendy_1)
-	#define RAY_1  0, 1, 500
+	#define RAY_1  0, 0, (LED_COUNT-1)	
+#elif defined(trendy_2)
+	#define RAY_1  0, 0, (LED_COUNT-1)
 #endif
 
-
 void firework() {
-	#if defined(LOGO)
+	#if defined(LOGO) or defined(trendy_1) or defined(trendy_2)
 		ws2812fx.setSegment(RAY_1, FX_MODE_FIREWORKS);
 	#elif defined(INCA_3)
 		ws2812fx.setSegment(EYE_C, FX_MODE_STATIC);
@@ -147,7 +141,7 @@ void firework() {
 }
 
 void firework_rainbow() {
-	#if defined(LOGO)
+#if defined(LOGO) or defined(trendy_1) or defined(trendy_2)
 		ws2812fx.setSegment(RAY_1, FX_MODE_FIREWORKS_RANDOM);
 	#elif defined(INCA_3)
 		ws2812fx.setSegment(EYE_C, FX_MODE_STATIC);
@@ -172,7 +166,7 @@ void firework_rainbow() {
 }
 
 void HyperSparkle() {
-	#if defined(LOGO)
+#if defined(LOGO) or defined(trendy_1) or defined(trendy_2)
 		ws2812fx.setSegment(RAY_1, FX_MODE_HYPER_SPARKLE);
 	#elif defined(INCA_3)
 		ws2812fx.setSegment(EYE_C, FX_MODE_STATIC);
@@ -197,7 +191,7 @@ void HyperSparkle() {
 }
 
 void test() {
-	#if defined(LOGO)
+	#if defined(LOGO) or defined(trendy_1) or defined(trendy_2)
 	#else
 		ws2812fx.setSegment(RAY_1,  FX_MODE_STATIC, RED);
 		ws2812fx.setSegment(RAY_2,  FX_MODE_STATIC, GREEN);
@@ -219,7 +213,7 @@ void test() {
 }
 
 void strobe() {
-	#if defined(LOGO)
+	#if defined(LOGO) or defined(trendy_1) or defined(trendy_2)
 		ws2812fx.setSegment(RAY_1, FX_MODE_BLINK, WHITE, 200);
 	#else
 		ws2812fx.setSegment(RAY_1, FX_MODE_BLINK, WHITE, 200);
@@ -242,7 +236,7 @@ void strobe() {
 }
 
 void static_anim() {
-	#if defined(LOGO)
+	#if defined(LOGO) or defined(trendy_1) or defined(trendy_2)
 		ws2812fx.setSegment(RAY_1, FX_MODE_STATIC);
 	#else
 		ws2812fx.setSegment(RAY_1, FX_MODE_STATIC);
@@ -265,7 +259,7 @@ void static_anim() {
 }
 
 void hypno() {
-	#if defined(LOGO)
+	#if defined(LOGO) or defined(trendy_1) or defined(trendy_2)
 		ws2812fx.setSegment(RAY_1, FX_MODE_THEATER_CHASE, color_1, 50);
 	#elif defined(INCA_3)
 		ws2812fx.setSegment(EYE_C, FX_MODE_STATIC);
@@ -286,7 +280,7 @@ void hypno() {
 }
 
 void wipe() {
-	#if defined(LOGO)
+	#if defined(LOGO) or defined(trendy_1) or defined(trendy_2)
 		ws2812fx.setSegment(RAY_1, FX_MODE_COLOR_WIPE, color_1, 3000);
 	#elif defined(INCA_3)
 		ws2812fx.setSegment(EYE_C, FX_MODE_STATIC);
@@ -311,7 +305,7 @@ void wipe() {
 }
 
 void rainbow() {
-	#if defined(LOGO)
+	#if defined(LOGO) or defined(trendy_1) or defined(trendy_2)
 		ws2812fx.setSegment(RAY_1, FX_MODE_RAINBOW, color_1, 100);
 	#elif defined(INCA_3)
 		ws2812fx.setSegment(EYE_C, FX_MODE_STATIC);
@@ -336,7 +330,7 @@ void rainbow() {
 }
 
 void outline() {
-	#if defined(LOGO)
+	#if defined(LOGO) or defined(trendy_1) or defined(trendy_2)
 		ws2812fx.setSegment(RAY_1, FX_MODE_RAINBOW_CYCLE);
 	#elif defined(INCA_3)
 		ws2812fx.setSegment(EYE_C, FX_MODE_STATIC);
@@ -348,7 +342,7 @@ void outline() {
 }
 
 void strobe_color() {
-	#if defined(LOGO)
+	#if defined(LOGO) or defined(trendy_1) or defined(trendy_2)
 		ws2812fx.setSegment(RAY_1, FX_MODE_BLINK, color_1, 200);
 	#else
 		ws2812fx.setSegment(EYE_L, FX_MODE_BLINK, color_1, 200);
@@ -371,7 +365,7 @@ void strobe_color() {
 
 
 void chase_rainbow() {
-	#if defined(LOGO)
+	#if defined(LOGO) or defined(trendy_1) or defined(trendy_2)
 		ws2812fx.setSegment(RAY_1, FX_MODE_CHASE_RAINBOW);
 	#elif defined(INCA_3)
 		ws2812fx.setSegment(EYE_C, FX_MODE_STATIC);
@@ -395,7 +389,7 @@ void chase_rainbow() {
 }
 
 void running_light() {
-	#if defined(LOGO)
+	#if defined(LOGO) or defined(trendy_1) or defined(trendy_2)
 		ws2812fx.setSegment(RAY_1, FX_MODE_RUNNING_LIGHTS);
 	#elif defined(INCA_3)
 		ws2812fx.setSegment(EYE_C, FX_MODE_STATIC);
@@ -419,7 +413,7 @@ void running_light() {
 }
 
 void comete() {
-	#if defined(LOGO)
+	#if defined(LOGO) or defined(trendy_1) or defined(trendy_2)
 		ws2812fx.setSegment(RAY_1, FX_MODE_COMET);
 	#elif defined(INCA_3)
 		ws2812fx.setSegment(EYE_C, FX_MODE_STATIC);
@@ -443,7 +437,7 @@ void comete() {
 }
 
 void TwinkleFOX() {
-	#if defined(LOGO)
+	#if defined(LOGO) or defined(trendy_1) or defined(trendy_2)
 		ws2812fx.setSegment(RAY_1, FX_MODE_TWINKLEFOX);
 	#elif defined(INCA_3)
 		ws2812fx.setSegment(EYE_C, FX_MODE_STATIC);
@@ -467,7 +461,7 @@ void TwinkleFOX() {
 }
 
 void fire() {
-	#if defined(LOGO)
+	#if defined(LOGO) or defined(trendy_1) or defined(trendy_2)
 		ws2812fx.setSegment(RAY_1, FX_MODE_TWINKLEFOX);
 	#elif defined(INCA_3)
 		ws2812fx.setSegment(EYE_C, FX_MODE_STATIC);
@@ -492,6 +486,7 @@ void fire() {
 
 int anim = 0;
 uint8_t bright = 255;
+uint8_t blackout = 0;
 
 void DMX_task(void* parameter) {
 	// Serial.printf("Task start\n");
@@ -504,10 +499,16 @@ void DMX_task(void* parameter) {
 
 			int new_anim = anim;
 
+
+			if (DMX::Read(DMX_CHANNEL_STROBE_G) > 127) {
+				is_strobe = 1;
+			} else {
+				blackout = 0;
+				is_strobe = 0;
+			}
+
 			if (DMX::Read(DMX_CHANNEL_STROBE) > 127)
 				new_anim = 255;
-			else if (DMX::Read(DMX_CHANNEL_MODE_0) > 127)
-				new_anim = 0;
 			else if (DMX::Read(DMX_CHANNEL_MODE_1) > 127)
 				new_anim = 1;
 			else if (DMX::Read(DMX_CHANNEL_MODE_2) > 127)
@@ -526,8 +527,6 @@ void DMX_task(void* parameter) {
 				new_anim = 8;
 			else if (DMX::Read(DMX_CHANNEL_MODE_9) > 127)
 				new_anim = 9;
-			else if (DMX::Read(DMX_CHANNEL_MODE_10) > 127)
-				new_anim = 10;
 			else
 				new_anim = 254;
 			
@@ -538,9 +537,9 @@ void DMX_task(void* parameter) {
 				ws2812fx.resetSegments();
 				ws2812fx.strip_off();
 				switch (anim) {
-					case 0:
-						strobe_color();
-						break;
+					// case 0:
+					// 	strobe_color();
+					// 	break;
 					case 1:
 						wipe();
 						break;
@@ -574,24 +573,27 @@ void DMX_task(void* parameter) {
 					case 254:
 						static_anim();
 						break;
-					// case 7:
-					// 	HyperSparkle();
-					// 	break;
 				}
 				ws2812fx.setAllSpeed(speed);
 			}
 
 			Serial.printf("Color: %d, %d, %d", DMX::Read(DMX_CHANNEL_COLOR_1_R), DMX::Read(DMX_CHANNEL_COLOR_1_G), DMX::Read(DMX_CHANNEL_COLOR_1_B));
 			if (anim != 255 && anim != 0) {
-				color_1 = ((uint32_t)DMX::Read(DMX_CHANNEL_COLOR_1_R) << 16) | ((uint32_t)DMX::Read(DMX_CHANNEL_COLOR_1_G) << 8) | ((uint32_t)DMX::Read(DMX_CHANNEL_COLOR_1_B));
+				uint32_t new_color = ((uint32_t)DMX::Read(DMX_CHANNEL_COLOR_1_R) << 16) | ((uint32_t)DMX::Read(DMX_CHANNEL_COLOR_1_G) << 8) | ((uint32_t)DMX::Read(DMX_CHANNEL_COLOR_1_B));
+				if (new_color != color_1) {
+					color_1 = new_color;
+					if (new_anim == 0) // strobe color hack
+						strobe_color();
+				}
 				ws2812fx.setAllColor(color_1);
 			}
 
-			// Serial.printf(", Bright: %d", DMX::Read(DMX_CHANNEL_BRIGHT));
-			// if (bright != DMX::Read(DMX_CHANNEL_BRIGHT)) {
-			// 	bright = DMX::Read(DMX_CHANNEL_BRIGHT);
-			// 	// ws2812fx.setBrightness(DMX::Read(DMX_CHANNEL_BRIGHT));
-			// }
+			#ifdef USE_BRIGHT
+				Serial.printf(", Bright: %d", DMX::Read(DMX_CHANNEL_BRIGHT));
+				if (bright != DMX::Read(DMX_CHANNEL_BRIGHT)) {
+					bright = DMX::Read(DMX_CHANNEL_BRIGHT);
+				}
+			#endif
 
 			if (anim == 254) { // static 
 				speed = 0;
@@ -602,6 +604,13 @@ void DMX_task(void* parameter) {
 					ws2812fx.setAllSpeed(speed);
 				}
 			}
+
+			int new_speed = 255 - DMX::Read(DMX_CHANNEL_STROBE_SPEED);
+			new_speed = map(new_speed, 0, 255, 200, 1000);
+			if (strobe_speed != new_speed) {
+				strobe_speed = new_speed;
+			}
+
 			Serial.printf(", Speed: %d", speed);
 			Serial.printf(", anime = %d", anim);
 			Serial.printf("\n");
@@ -624,7 +633,10 @@ void DMX_task(void* parameter) {
 
 		for (int i = 0; i < ws2812fx_p.getNumBytes(); i++) {
 			uint32_t p = pixels_v1[i];
-			p = (p * bright) >> 8;
+			if (blackout)
+				p = 0;
+			else
+				p = (p * bright) >> 8;
 			pixels_p[i] = p;
 		}
 		ws2812fx_p.Adafruit_NeoPixel::show();
@@ -648,12 +660,28 @@ void led_task(void* parameter) {
 		ledcAttachPin(ledPin_2, channel_red);
 	#endif
 	ws2812fx.setCustomShow(myCustomShow); // set the custom show function to forgo the NeoPixel
-
+	int ctn= 0;
 	for (;;) {
 		ws2812fx.service();
+		if (is_strobe) {
+			ctn++;
+			// Serial.printf("%d\n", ctn);
+			if (ctn > ((strobe_speed) / 100)) {
+				blackout = !blackout;
+				ctn = 0;
+			}
+		}
 		vTaskDelay(1 / portTICK_PERIOD_MS);
 	}
 }
+
+// void strobe_task(void* parameter) {
+// 	int ctn = 0;
+// 	for (;;) {
+
+// 		vTaskDelay(1 / portTICK_PERIOD_MS);
+// 	}
+// }
 
 
 void setup() {
@@ -681,6 +709,15 @@ void setup() {
 		NULL,             // Task handle
 		0          // Core you want to run the task on (0 or 1)
 	);
+	// xTaskCreatePinnedToCore(
+	// 	strobe_task,    // Function that should be called
+	// 	"strobe_task",   // Name of the task (for debugging)
+	// 	10000,            // Stack size (bytes)
+	// 	NULL,            // Parameter to pass
+	// 	1,               // Task priority
+	// 	NULL,             // Task handle
+	// 	1          // Core you want to run the task on (0 or 1)
+	// );
 	xTaskCreatePinnedToCore(
 		DMX_task,    // Function that should be called
 		"DMX_task",   // Name of the task (for debugging)
