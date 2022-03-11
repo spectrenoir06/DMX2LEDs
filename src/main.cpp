@@ -14,6 +14,9 @@ int ledPin_0 = 12;    // BUE
 int ledPin_1 = 13;    // GREEN
 int ledPin_2 = 5;     // RED
 
+uint8_t led_blink = 0;
+uint8_t led_status = 2;
+
 const int freq = 200000;
 const int resolution = 8;
 
@@ -148,7 +151,7 @@ uint8_t snakeMode2 = ws2812fx.setCustomMode(F("snake mode 2"), snake2);
 	#define RAY_2  1, 25, 50
 	#define RAY_3  2, 51, 76
 
-	#define EYE_C  3,  78-1, 111-1    // third eye
+	#define EYE_C  3,  78-1, 111-1  // third eye
 	#define TOP    4, 112-1, 205-1  // tete
 	#define APP    5, 206-1, 209-1 // aprendice
 	#define EYE_R  6, 210-1, 256-1 // eye right
@@ -554,7 +557,8 @@ void DMX_task(void* parameter) {
 
 	for (;;) { // infinite loop
 		if (DMX::IsHealthy())     {
-
+			digitalWrite(led_status, led_blink);
+			led_blink = ~led_blink;
 			int new_anim = anim;
 
 
@@ -672,6 +676,10 @@ void DMX_task(void* parameter) {
 			Serial.printf(", Speed: %d", speed);
 			Serial.printf(", anime = %d", anim);
 			Serial.printf("\n");
+		} else {
+			#ifdef USE_TEST
+				
+			#endif
 		}
 		vTaskDelay(10 / portTICK_PERIOD_MS);
 	}
@@ -700,8 +708,6 @@ void DMX_task(void* parameter) {
 		ws2812fx_p.Adafruit_NeoPixel::show();
 	}
 #endif
-
-
 void led_task(void* parameter) {
 	ws2812fx_p.init();
 
@@ -709,6 +715,8 @@ void led_task(void* parameter) {
 	ws2812fx.setBrightness(255);
 	ws2812fx.start();
 
+	pinMode(led_status, OUTPUT);
+	digitalWrite(led_status, led_blink);
 	#ifdef INCA_3
 		ledcSetup(0, freq, resolution);
 		ledcSetup(1, freq, resolution);
