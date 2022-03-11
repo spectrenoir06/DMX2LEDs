@@ -52,6 +52,61 @@ int32_t speed = 0;
 int32_t strobe_speed =0;
 uint8_t is_strobe = 0;
 
+uint8_t size = 0;
+uint8_t snake_ctn = 0;
+uint8_t snake_on = 0;
+
+uint16_t snake(void) { // random chase
+	WS2812FX::Segment* seg = ws2812fx.getSegment(); // get the current segment
+	// int seg_len = seg->stop - seg->start + 1;
+	// seg->setOptions(NO_OPTIONS);
+	for (uint16_t i = seg->stop; i > seg->start; i--) {
+		ws2812fx.setPixelColor(i, ws2812fx.getPixelColor(i - 1));
+	}
+	snake_ctn++;
+	if (snake_ctn > 2) {
+		snake_on = !snake_on;
+		snake_ctn = 0;
+	}
+
+	if (snake_on)
+		ws2812fx.setPixelColor(seg->start, seg->colors[0]);
+	else
+		ws2812fx.setPixelColor(seg->start, 0, 0, 0);
+	return (seg->speed / 25); // return the delay until the next animation step (in msec)
+}
+
+
+int snake_size = 10;
+// int snake_space = 20;
+
+uint32_t pos_x = 0;
+
+uint16_t snake2(void) { // random chase
+	WS2812FX::Segment* seg = ws2812fx.getSegment(); // get the current segment
+
+	for (int i = seg->start; i <= seg->stop; i++) // clear
+		ws2812fx.setPixelColor(i, 0);
+
+	for (int i = pos_x; i < pos_x + snake_size; i++) {
+		ws2812fx.setPixelColor(i, color_1);
+	}
+
+	// for (int i = pos_x + snake_size; i < pos_x + snake_size + snake_space; i++) {
+	// 	ws2812fx.setPixelColor(i, 0x000000);
+	// }
+
+	pos_x++;
+	if (pos_x > seg->stop + snake_size) {
+		pos_x = 0;
+	}
+	return (seg->speed / 25); // return the delay until the next animation step (in msec)
+}
+
+uint8_t snakeMode = ws2812fx.setCustomMode(F("snake mode"), snake);
+uint8_t snakeMode2 = ws2812fx.setCustomMode(F("snake mode 2"), snake2);
+
+
 #if defined(INCA_1)
 	#define RAY_1  0, 0,  23
 	#define RAY_2  1, 27, 50
@@ -109,14 +164,14 @@ uint8_t is_strobe = 0;
 #elif defined(LOGO)
 	#define RAY_1  0, 1, 143
 
-#elif defined(trendy_1)
+#elif defined(carre_1)
 	#define RAY_1  0, 0, (LED_COUNT-1)	
-#elif defined(trendy_2)
+#elif defined(carre_2)
 	#define RAY_1  0, 0, (LED_COUNT-1)
 #endif
 
 void firework() {
-	#if defined(LOGO) or defined(trendy_1) or defined(trendy_2)
+	#if defined(LOGO) or defined(carre_1) or defined(carre_2)
 		ws2812fx.setSegment(RAY_1, FX_MODE_FIREWORKS);
 	#elif defined(INCA_3)
 		ws2812fx.setSegment(EYE_C, FX_MODE_STATIC);
@@ -141,8 +196,9 @@ void firework() {
 }
 
 void firework_rainbow() {
-#if defined(LOGO) or defined(trendy_1) or defined(trendy_2)
-		ws2812fx.setSegment(RAY_1, FX_MODE_FIREWORKS_RANDOM);
+#if defined(LOGO) or defined(carre_1) or defined(carre_2)
+		// ws2812fx.setSegment(RAY_1, FX_MODE_FIREWORKS_RANDOM);
+		ws2812fx.setSegment(RAY_1, snakeMode2, color_1, 10);
 	#elif defined(INCA_3)
 		ws2812fx.setSegment(EYE_C, FX_MODE_STATIC);
 	#else
@@ -166,7 +222,7 @@ void firework_rainbow() {
 }
 
 void HyperSparkle() {
-#if defined(LOGO) or defined(trendy_1) or defined(trendy_2)
+#if defined(LOGO) or defined(carre_1) or defined(carre_2)
 		ws2812fx.setSegment(RAY_1, FX_MODE_HYPER_SPARKLE);
 	#elif defined(INCA_3)
 		ws2812fx.setSegment(EYE_C, FX_MODE_STATIC);
@@ -191,7 +247,7 @@ void HyperSparkle() {
 }
 
 void test() {
-	#if defined(LOGO) or defined(trendy_1) or defined(trendy_2)
+	#if defined(LOGO) or defined(carre_1) or defined(carre_2)
 	#else
 		ws2812fx.setSegment(RAY_1,  FX_MODE_STATIC, RED);
 		ws2812fx.setSegment(RAY_2,  FX_MODE_STATIC, GREEN);
@@ -213,7 +269,7 @@ void test() {
 }
 
 void strobe() {
-	#if defined(LOGO) or defined(trendy_1) or defined(trendy_2)
+	#if defined(LOGO) or defined(carre_1) or defined(carre_2)
 		ws2812fx.setSegment(RAY_1, FX_MODE_BLINK, WHITE, 200);
 	#else
 		ws2812fx.setSegment(RAY_1, FX_MODE_BLINK, WHITE, 200);
@@ -236,7 +292,7 @@ void strobe() {
 }
 
 void static_anim() {
-	#if defined(LOGO) or defined(trendy_1) or defined(trendy_2)
+	#if defined(LOGO) or defined(carre_1) or defined(carre_2)
 		ws2812fx.setSegment(RAY_1, FX_MODE_STATIC);
 	#else
 		ws2812fx.setSegment(RAY_1, FX_MODE_STATIC);
@@ -259,7 +315,7 @@ void static_anim() {
 }
 
 void hypno() {
-	#if defined(LOGO) or defined(trendy_1) or defined(trendy_2)
+	#if defined(LOGO) or defined(carre_1) or defined(carre_2)
 		ws2812fx.setSegment(RAY_1, FX_MODE_THEATER_CHASE, color_1, 50);
 	#elif defined(INCA_3)
 		ws2812fx.setSegment(EYE_C, FX_MODE_STATIC);
@@ -280,7 +336,7 @@ void hypno() {
 }
 
 void wipe() {
-	#if defined(LOGO) or defined(trendy_1) or defined(trendy_2)
+	#if defined(LOGO) or defined(carre_1) or defined(carre_2)
 		ws2812fx.setSegment(RAY_1, FX_MODE_COLOR_WIPE, color_1, 3000);
 	#elif defined(INCA_3)
 		ws2812fx.setSegment(EYE_C, FX_MODE_STATIC);
@@ -305,7 +361,7 @@ void wipe() {
 }
 
 void rainbow() {
-	#if defined(LOGO) or defined(trendy_1) or defined(trendy_2)
+	#if defined(LOGO) or defined(carre_1) or defined(carre_2)
 		ws2812fx.setSegment(RAY_1, FX_MODE_RAINBOW, color_1, 100);
 	#elif defined(INCA_3)
 		ws2812fx.setSegment(EYE_C, FX_MODE_STATIC);
@@ -330,7 +386,7 @@ void rainbow() {
 }
 
 void outline() {
-	#if defined(LOGO) or defined(trendy_1) or defined(trendy_2)
+	#if defined(LOGO) or defined(carre_1) or defined(carre_2)
 		ws2812fx.setSegment(RAY_1, FX_MODE_RAINBOW_CYCLE);
 	#elif defined(INCA_3)
 		ws2812fx.setSegment(EYE_C, FX_MODE_STATIC);
@@ -342,7 +398,7 @@ void outline() {
 }
 
 void strobe_color() {
-	#if defined(LOGO) or defined(trendy_1) or defined(trendy_2)
+	#if defined(LOGO) or defined(carre_1) or defined(carre_2)
 		ws2812fx.setSegment(RAY_1, FX_MODE_BLINK, color_1, 200);
 	#else
 		ws2812fx.setSegment(EYE_L, FX_MODE_BLINK, color_1, 200);
@@ -365,8 +421,10 @@ void strobe_color() {
 
 
 void chase_rainbow() {
-	#if defined(LOGO) or defined(trendy_1) or defined(trendy_2)
-		ws2812fx.setSegment(RAY_1, FX_MODE_CHASE_RAINBOW);
+	#if defined(LOGO) or defined(carre_1) or defined(carre_2)
+		ws2812fx.setSegment(RAY_1, snakeMode, color_1, 10);
+		// ws2812fx.setSegment(RAY_1, FX_MODE_RAINBOW, color_1, 100);
+
 	#elif defined(INCA_3)
 		ws2812fx.setSegment(EYE_C, FX_MODE_STATIC);
 	#else
@@ -389,7 +447,7 @@ void chase_rainbow() {
 }
 
 void running_light() {
-	#if defined(LOGO) or defined(trendy_1) or defined(trendy_2)
+	#if defined(LOGO) or defined(carre_1) or defined(carre_2)
 		ws2812fx.setSegment(RAY_1, FX_MODE_RUNNING_LIGHTS);
 	#elif defined(INCA_3)
 		ws2812fx.setSegment(EYE_C, FX_MODE_STATIC);
@@ -413,7 +471,7 @@ void running_light() {
 }
 
 void comete() {
-	#if defined(LOGO) or defined(trendy_1) or defined(trendy_2)
+	#if defined(LOGO) or defined(carre_1) or defined(carre_2)
 		ws2812fx.setSegment(RAY_1, FX_MODE_COMET);
 	#elif defined(INCA_3)
 		ws2812fx.setSegment(EYE_C, FX_MODE_STATIC);
@@ -437,7 +495,7 @@ void comete() {
 }
 
 void TwinkleFOX() {
-	#if defined(LOGO) or defined(trendy_1) or defined(trendy_2)
+	#if defined(LOGO) or defined(carre_1) or defined(carre_2)
 		ws2812fx.setSegment(RAY_1, FX_MODE_TWINKLEFOX);
 	#elif defined(INCA_3)
 		ws2812fx.setSegment(EYE_C, FX_MODE_STATIC);
@@ -461,7 +519,7 @@ void TwinkleFOX() {
 }
 
 void fire() {
-	#if defined(LOGO) or defined(trendy_1) or defined(trendy_2)
+	#if defined(LOGO) or defined(carre_1) or defined(carre_2)
 		ws2812fx.setSegment(RAY_1, FX_MODE_TWINKLEFOX);
 	#elif defined(INCA_3)
 		ws2812fx.setSegment(EYE_C, FX_MODE_STATIC);
