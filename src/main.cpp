@@ -24,25 +24,25 @@ const int channel_red   = 2;
 const int channel_green = 1;
 const int channel_blue  = 0;
 
-#define DMX_CHANNEL_COLOR_1_R (DMX_OFF + 1)
-#define DMX_CHANNEL_COLOR_1_G (DMX_OFF + 2)
-#define DMX_CHANNEL_COLOR_1_B (DMX_OFF + 3)
-#define DMX_CHANNEL_SPEED     (DMX_OFF + 4)
-#define DMX_CHANNEL_STROBE    (DMX_OFF + 5)
-#define DMX_CHANNEL_STROBE_G  (DMX_OFF + 6)
+#define DMX_CHANNEL_COLOR_1_R (1)
+#define DMX_CHANNEL_COLOR_1_G (2)
+#define DMX_CHANNEL_COLOR_1_B (3)
+#define DMX_CHANNEL_SPEED     (4)
+#define DMX_CHANNEL_STROBE    (5)
+#define DMX_CHANNEL_STROBE_G  (6)
 
-#define DMX_CHANNEL_MODE_1    (DMX_OFF + 7)
-#define DMX_CHANNEL_MODE_2    (DMX_OFF + 8)
-#define DMX_CHANNEL_MODE_3    (DMX_OFF + 9)
-#define DMX_CHANNEL_MODE_4    (DMX_OFF + 10)
-#define DMX_CHANNEL_MODE_5    (DMX_OFF + 11)
-#define DMX_CHANNEL_MODE_6    (DMX_OFF + 12)
-#define DMX_CHANNEL_MODE_7    (DMX_OFF + 13)
-#define DMX_CHANNEL_MODE_8    (DMX_OFF + 14)
-#define DMX_CHANNEL_MODE_9    (DMX_OFF + 15)
+#define DMX_CHANNEL_MODE_1    (7)
+#define DMX_CHANNEL_MODE_2    (8)
+#define DMX_CHANNEL_MODE_3    (9)
+#define DMX_CHANNEL_MODE_4    (10)
+#define DMX_CHANNEL_MODE_5    (11)
+#define DMX_CHANNEL_MODE_6    (12)
+#define DMX_CHANNEL_MODE_7    (13)
+#define DMX_CHANNEL_MODE_8    (14)
+#define DMX_CHANNEL_MODE_9    (15)
 
-#define DMX_CHANNEL_BRIGHT    (DMX_OFF + 16)
-#define DMX_CHANNEL_STROBE_SPEED (DMX_OFF + 17)
+#define DMX_CHANNEL_BRIGHT    (16)
+#define DMX_CHANNEL_STROBE_SPEED (17)
 
 
 WS2812FX ws2812fx    = WS2812FX(LED_COUNT, LED_PIN, LEDS_TYPE, 20, 20);
@@ -296,7 +296,7 @@ void strobe() {
 
 void static_anim() {
 	#if defined(LOGO) or defined(carre_1) or defined(carre_2)
-		ws2812fx.setSegment(RAY_1, FX_MODE_STATIC);
+		ws2812fx.setSegment(RAY_1, FX_MODE_STATIC, color_1, 0);
 	#else
 		ws2812fx.setSegment(RAY_1, FX_MODE_STATIC);
 		ws2812fx.setSegment(RAY_2, FX_MODE_STATIC);
@@ -550,138 +550,182 @@ uint8_t bright = 255;
 uint8_t blackout = 0;
 
 void DMX_task(void* parameter) {
-	// Serial.printf("Task start\n");
+	pinMode(DIP_PIN_0, INPUT_PULLUP);
+	pinMode(DIP_PIN_1, INPUT_PULLUP);
+	pinMode(DIP_PIN_2, INPUT_PULLUP);
+	pinMode(DIP_PIN_3, INPUT_PULLUP);
+	pinMode(DIP_PIN_4, INPUT_PULLUP);
+	pinMode(DIP_PIN_5, INPUT_PULLUP);
+	pinMode(DIP_PIN_6, INPUT_PULLUP);
+	pinMode(DIP_PIN_7, INPUT_PULLUP);
+	pinMode(DIP_PIN_8, INPUT_PULLUP);
+	pinMode(DIP_PIN_9, INPUT_PULLUP);
+
+	delay(10);
+
 	DMX::Initialize(input);
 	Serial.println("initialized...");
 	wipe();
+	uint8_t ctn = 0;
+	uint8_t test_mode = 0;
+	
 
 	for (;;) { // infinite loop
-		if (DMX::IsHealthy())     {
-			digitalWrite(led_status, led_blink);
-			led_blink = ~led_blink;
-			int new_anim = anim;
+		uint16_t dip = (digitalRead(DIP_PIN_0) ? 0 : 1)
+			| (digitalRead(DIP_PIN_1) ? 0 : 1 << 1)
+			| (digitalRead(DIP_PIN_2) ? 0 : 1 << 2)
+			| (digitalRead(DIP_PIN_3) ? 0 : 1 << 3)
+			| (digitalRead(DIP_PIN_4) ? 0 : 1 << 4)
+			| (digitalRead(DIP_PIN_5) ? 0 : 1 << 5)
+			| (digitalRead(DIP_PIN_6) ? 0 : 1 << 6)
+			| (digitalRead(DIP_PIN_7) ? 0 : 1 << 7)
+			| (digitalRead(DIP_PIN_8) ? 0 : 1 << 8)
+			| (digitalRead(DIP_PIN_9) ? 0 : 1 << 9);
+		uint16_t dmx_adress = dip - 1;
 
+		if (DMX::IsHealthy()){
+			digitalWrite(led_status, HIGH);
+			if (dip != 0) {
+				test_mode = 0;
+				ctn = 0;
+				int new_anim = anim;
 
-			if (DMX::Read(DMX_CHANNEL_STROBE_G) > 127) {
-				is_strobe = 1;
-			} else {
-				blackout = 0;
-				is_strobe = 0;
-			}
-
-			if (DMX::Read(DMX_CHANNEL_STROBE) > 127)
-				new_anim = 255;
-			else if (DMX::Read(DMX_CHANNEL_MODE_1) > 127)
-				new_anim = 1;
-			else if (DMX::Read(DMX_CHANNEL_MODE_2) > 127)
-				new_anim = 2;
-			else if (DMX::Read(DMX_CHANNEL_MODE_3) > 127)
-				new_anim = 3;
-			else if (DMX::Read(DMX_CHANNEL_MODE_4) > 127)
-				new_anim = 4;
-			else if (DMX::Read(DMX_CHANNEL_MODE_5) > 127)
-				new_anim = 5;
-			else if (DMX::Read(DMX_CHANNEL_MODE_6) > 127)
-				new_anim = 6;
-			else if (DMX::Read(DMX_CHANNEL_MODE_7) > 127)
-				new_anim = 7;
-			else if (DMX::Read(DMX_CHANNEL_MODE_8) > 127)
-				new_anim = 8;
-			else if (DMX::Read(DMX_CHANNEL_MODE_9) > 127)
-				new_anim = 9;
-			else
-				new_anim = 254;
-			
-
-			if (new_anim != anim) {
-				Serial.printf("New anim %d\n", new_anim);
-				anim = new_anim;
-				ws2812fx.resetSegments();
-				ws2812fx.strip_off();
-				switch (anim) {
-					// case 0:
-					// 	strobe_color();
-					// 	break;
-					case 1:
-						wipe();
-						break;
-					case 2:
-						hypno();
-						break;
-					case 3:
-						firework();
-						break;
-					case 4:
-						running_light();
-						break;
-					case 5:
-						TwinkleFOX();
-						break;
-					case 6:
-						fire();
-						break;
-					case 7:
-						comete();
-						break;
-					case 8:
-						firework_rainbow();
-						break;
-					case 9:
-						chase_rainbow();
-						break;
-					case 255:
-						strobe();
-						break;
-					case 254:
-						static_anim();
-						break;
+				if (DMX::Read(dmx_adress + DMX_CHANNEL_STROBE_G) > 127) {
+					is_strobe = 1;
+				} else {
+					blackout = 0;
+					is_strobe = 0;
 				}
-				ws2812fx.setAllSpeed(speed);
-			}
 
-			Serial.printf("Color: %d, %d, %d", DMX::Read(DMX_CHANNEL_COLOR_1_R), DMX::Read(DMX_CHANNEL_COLOR_1_G), DMX::Read(DMX_CHANNEL_COLOR_1_B));
-			if (anim != 255 && anim != 0) {
-				uint32_t new_color = ((uint32_t)DMX::Read(DMX_CHANNEL_COLOR_1_R) << 16) | ((uint32_t)DMX::Read(DMX_CHANNEL_COLOR_1_G) << 8) | ((uint32_t)DMX::Read(DMX_CHANNEL_COLOR_1_B));
-				if (new_color != color_1) {
-					color_1 = new_color;
-					if (new_anim == 0) // strobe color hack
-						strobe_color();
-				}
-				ws2812fx.setAllColor(color_1);
-			}
+				if (DMX::Read(dmx_adress + DMX_CHANNEL_STROBE) > 127)
+					new_anim = 255;
+				else if (DMX::Read(dmx_adress + DMX_CHANNEL_MODE_1) > 127)
+					new_anim = 1;
+				else if (DMX::Read(dmx_adress + DMX_CHANNEL_MODE_2) > 127)
+					new_anim = 2;
+				else if (DMX::Read(dmx_adress + DMX_CHANNEL_MODE_3) > 127)
+					new_anim = 3;
+				else if (DMX::Read(dmx_adress + DMX_CHANNEL_MODE_4) > 127)
+					new_anim = 4;
+				else if (DMX::Read(dmx_adress + DMX_CHANNEL_MODE_5) > 127)
+					new_anim = 5;
+				else if (DMX::Read(dmx_adress + DMX_CHANNEL_MODE_6) > 127)
+					new_anim = 6;
+				else if (DMX::Read(dmx_adress + DMX_CHANNEL_MODE_7) > 127)
+					new_anim = 7;
+				else if (DMX::Read(dmx_adress + DMX_CHANNEL_MODE_8) > 127)
+					new_anim = 8;
+				else if (DMX::Read(dmx_adress + DMX_CHANNEL_MODE_9) > 127)
+					new_anim = 9;
+				else
+					new_anim = 254;
+				
 
-			#ifdef USE_BRIGHT
-				Serial.printf(", Bright: %d", DMX::Read(DMX_CHANNEL_BRIGHT));
-				if (bright != DMX::Read(DMX_CHANNEL_BRIGHT)) {
-					bright = DMX::Read(DMX_CHANNEL_BRIGHT);
-				}
-			#endif
-
-			if (anim == 254) { // static 
-				speed = 0;
-			} else {
-				int new_speed = 2650 - DMX::Read(DMX_CHANNEL_SPEED) * 10;
-				if (speed != new_speed) {
-					speed = new_speed;
+				if (new_anim != anim) {
+					Serial.printf("New anim %d\n", new_anim);
+					anim = new_anim;
+					ws2812fx.resetSegments();
+					ws2812fx.strip_off();
+					switch (anim) {
+						// case 0:
+						// 	strobe_color();
+						// 	break;
+						case 1:
+							wipe();
+							break;
+						case 2:
+							hypno();
+							break;
+						case 3:
+							firework();
+							break;
+						case 4:
+							running_light();
+							break;
+						case 5:
+							TwinkleFOX();
+							break;
+						case 6:
+							fire();
+							break;
+						case 7:
+							comete();
+							break;
+						case 8:
+							firework_rainbow();
+							break;
+						case 9:
+							chase_rainbow();
+							break;
+						case 255:
+							strobe();
+							break;
+						case 254:
+							static_anim();
+							break;
+					}
 					ws2812fx.setAllSpeed(speed);
 				}
-			}
 
-			int new_speed = 255 - DMX::Read(DMX_CHANNEL_STROBE_SPEED);
-			new_speed = map(new_speed, 0, 255, 200, 1000);
-			if (strobe_speed != new_speed) {
-				strobe_speed = new_speed;
-			}
+				Serial.printf("Color: %d, %d, %d", DMX::Read(dmx_adress + DMX_CHANNEL_COLOR_1_R), DMX::Read(dmx_adress + DMX_CHANNEL_COLOR_1_G), DMX::Read(dmx_adress + DMX_CHANNEL_COLOR_1_B));
+				if (anim != 255 && anim != 0) {
+					uint32_t new_color = ((uint32_t)DMX::Read(dmx_adress + DMX_CHANNEL_COLOR_1_R) << 16) | ((uint32_t)DMX::Read(dmx_adress + DMX_CHANNEL_COLOR_1_G) << 8) | ((uint32_t)DMX::Read(dmx_adress + DMX_CHANNEL_COLOR_1_B));
+					if (new_color != color_1) {
+						color_1 = new_color;
+						if (new_anim == 0) // strobe color hack
+							strobe_color();
+					}
+					ws2812fx.setAllColor(color_1);
+				}
 
-			Serial.printf(", Speed: %d", speed);
-			Serial.printf(", anime = %d", anim);
-			Serial.printf("\n");
-		} else {
-			#ifdef USE_TEST
-				
-			#endif
+				#ifdef USE_BRIGHT
+					Serial.printf(", Bright: %d", DMX::Read(dmx_adress + DMX_CHANNEL_BRIGHT));
+					if (bright != DMX::Read(dmx_adress + DMX_CHANNEL_BRIGHT)) {
+						bright = DMX::Read(dmx_adress + DMX_CHANNEL_BRIGHT);
+					}
+				#endif
+
+				if (anim == 254) { // static 
+					speed = 0;
+				} else {
+					int new_speed = 2650 - DMX::Read(dmx_adress + DMX_CHANNEL_SPEED) * 10;
+					if (speed != new_speed) {
+						speed = new_speed;
+						ws2812fx.setAllSpeed(speed);
+					}
+				}
+
+				int new_speed = 255 - DMX::Read(dmx_adress + DMX_CHANNEL_STROBE_SPEED);
+				new_speed = map(new_speed, 0, 255, 200, 1000);
+				if (strobe_speed != new_speed) {
+					strobe_speed = new_speed;
+				}
+
+				Serial.printf(", Speed: %d", speed);
+				Serial.printf(", anime = %d", anim);
+				Serial.printf(", adress DMX: %d", dmx_adress + 1);
+				// for (int i=0; i<20; i++) {
+				// 	Serial.printf("%d, ", DMX::Read(i+1));
+				// }
+				Serial.printf("\n");
+			}
+		} else
+			if (ctn++ > 10)
+				digitalWrite(led_status, LOW);
+
+		if (dip == 0) {
+			if (test_mode == 0) {
+				Serial.printf("test Mode\n");
+				ws2812fx.resetSegments();
+				ws2812fx.strip_off();
+				bright = 50;
+				// chase_rainbow();
+				ws2812fx.setSegment(RAY_1, FX_MODE_RAINBOW_CYCLE, color_1, 10);
+			}
+			test_mode = 1;
 		}
-		vTaskDelay(10 / portTICK_PERIOD_MS);
+
+		vTaskDelay(25 / portTICK_PERIOD_MS);
 	}
 }
 
@@ -708,6 +752,8 @@ void DMX_task(void* parameter) {
 		ws2812fx_p.Adafruit_NeoPixel::show();
 	}
 #endif
+
+
 void led_task(void* parameter) {
 	ws2812fx_p.init();
 
@@ -741,15 +787,6 @@ void led_task(void* parameter) {
 	}
 }
 
-// void strobe_task(void* parameter) {
-// 	int ctn = 0;
-// 	for (;;) {
-
-// 		vTaskDelay(1 / portTICK_PERIOD_MS);
-// 	}
-// }
-
-
 void setup() {
 	Serial.begin(115200);
 	Serial.printf("Start\n");
@@ -775,15 +812,7 @@ void setup() {
 		NULL,             // Task handle
 		0          // Core you want to run the task on (0 or 1)
 	);
-	// xTaskCreatePinnedToCore(
-	// 	strobe_task,    // Function that should be called
-	// 	"strobe_task",   // Name of the task (for debugging)
-	// 	10000,            // Stack size (bytes)
-	// 	NULL,            // Parameter to pass
-	// 	1,               // Task priority
-	// 	NULL,             // Task handle
-	// 	1          // Core you want to run the task on (0 or 1)
-	// );
+
 	xTaskCreatePinnedToCore(
 		DMX_task,    // Function that should be called
 		"DMX_task",   // Name of the task (for debugging)
