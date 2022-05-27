@@ -17,6 +17,14 @@
 
 #include <dmx.h>
 
+#include "driver/gpio.h"
+#include "driver/uart.h"
+
+#define UART_TXD_INV  (BIT(22))
+#define UART_TXD_INV_M  (BIT(22))
+#define UART_INVERSE_TXD   (UART_TXD_INV_M)    /*!< UART TXD output inverse*/
+
+
 #define DMX_SERIAL_INPUT_PIN    GPIO_NUM_16 // pin for dmx rx
 #define DMX_SERIAL_OUTPUT_PIN   GPIO_NUM_17 // pin for dmx tx
 #define DMX_SERIAL_IO_PIN       GPIO_NUM_4  // pin for dmx rx/tx change
