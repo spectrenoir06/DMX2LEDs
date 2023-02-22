@@ -584,16 +584,16 @@ void DMX_task(void* parameter) {
 	
 
 	for (;;) { // infinite loop
-		uint16_t dip = (digitalRead(DIP_PIN_0) ? 0 : 1)
-			| (digitalRead(DIP_PIN_1) ? 0 : 1 << 1)
-			| (digitalRead(DIP_PIN_2) ? 0 : 1 << 2)
-			| (digitalRead(DIP_PIN_3) ? 0 : 1 << 3)
-			| (digitalRead(DIP_PIN_4) ? 0 : 1 << 4)
-			| (digitalRead(DIP_PIN_5) ? 0 : 1 << 5)
-			| (digitalRead(DIP_PIN_6) ? 0 : 1 << 6)
-			| (digitalRead(DIP_PIN_7) ? 0 : 1 << 7)
-			| (digitalRead(DIP_PIN_8) ? 0 : 1 << 8)
-			| (digitalRead(DIP_PIN_9) ? 0 : 1 << 9);
+		// uint16_t dip = (digitalRead(DIP_PIN_0) ? 0 : 1)
+		// 	| (digitalRead(DIP_PIN_1) ? 0 : 1 << 1)
+		// 	| (digitalRead(DIP_PIN_2) ? 0 : 1 << 2)
+		// 	| (digitalRead(DIP_PIN_3) ? 0 : 1 << 3)
+		// 	| (digitalRead(DIP_PIN_4) ? 0 : 1 << 4)
+		// 	| (digitalRead(DIP_PIN_5) ? 0 : 1 << 5)
+		// 	| (digitalRead(DIP_PIN_6) ? 0 : 1 << 6)
+		// 	| (digitalRead(DIP_PIN_7) ? 0 : 1 << 7)
+		// 	| (digitalRead(DIP_PIN_8) ? 0 : 1 << 8)
+		// 	| (digitalRead(DIP_PIN_9) ? 0 : 1 << 9);
 		uint16_t dmx_adress = dip - 1;
 
 		if (DMX::IsHealthy()){
