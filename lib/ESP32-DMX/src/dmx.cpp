@@ -24,11 +24,6 @@
 #define UART_TXD_INV_M  (BIT(22))
 #define UART_INVERSE_TXD   (UART_TXD_INV_M)    /*!< UART TXD output inverse*/
 
-
-#define DMX_SERIAL_INPUT_PIN    GPIO_NUM_16 // pin for dmx rx
-#define DMX_SERIAL_OUTPUT_PIN   GPIO_NUM_17 // pin for dmx tx
-#define DMX_SERIAL_IO_PIN       GPIO_NUM_4  // pin for dmx rx/tx change
-
 #define DMX_UART_NUM            UART_NUM_2  // dmx uart
 
 #define HEALTHY_TIME            500         // timeout in ms 
@@ -81,12 +76,12 @@ void DMX::Initialize(DMXDirection direction)
 
     // set gpio for direction
     gpio_pad_select_gpio(DMX_SERIAL_IO_PIN);
-    gpio_set_direction(DMX_SERIAL_IO_PIN, GPIO_MODE_OUTPUT);
+    gpio_set_direction((gpio_num_t)DMX_SERIAL_IO_PIN, GPIO_MODE_OUTPUT);
 
     // depending on parameter set gpio for direction change and start rx or tx thread
     if(direction == output)
     {
-        gpio_set_level(DMX_SERIAL_IO_PIN, 1);
+        gpio_set_level((gpio_num_t)DMX_SERIAL_IO_PIN, 1);
         dmx_state = DMX_OUTPUT;
         
         // create send task
@@ -94,7 +89,7 @@ void DMX::Initialize(DMXDirection direction)
     }
     else
     {    
-        gpio_set_level(DMX_SERIAL_IO_PIN, 0);
+        gpio_set_level((gpio_num_t)DMX_SERIAL_IO_PIN, 0);
         dmx_state = DMX_IDLE;
 
         // create receive task

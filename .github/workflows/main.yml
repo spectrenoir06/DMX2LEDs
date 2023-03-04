@@ -27,14 +27,6 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install --upgrade platformio
-    # - name: Build inca_1
-    #   run: pio run -e inca_1
-    # - name: Build inca_2
-    #   run: pio run -e inca_2
-    # - name: Build inca_3
-    #   run: pio run -e inca_3
-    # - name: Build LOGO
-    #   run: pio run -e LOGO
     - name: Build carre_1
       run: pio run -e carre_1
     - name: Build carre_2
