@@ -33,9 +33,10 @@ WS2812FX ws2812fx    = WS2812FX(LED_COUNT, LED_PIN_1, LEDS_TYPE, 20, 20);
 WS2812FX ws2812fx_p  = WS2812FX(LED_COUNT, LED_PIN_1, LEDS_TYPE, 1, 1);
 
 uint32_t color_1 = 0xFF0000;
-int32_t speed = 0;
-int32_t strobe_speed =0;
-uint8_t is_strobe = 0;
+int32_t  speed = 0;
+int32_t  strobe_speed =0;
+uint8_t  is_strobe = 0;
+uint32_t strob_ctn = 0;
 unsigned long lastUpdate = millis();
 
 
@@ -96,7 +97,6 @@ void start_anim(uint8_t anim) {
 			// ws2812fx.setSegment(SEG_1, FX_MODE_BLINK, WHITE, 200);
 			ws2812fx.setSegment(SEG_1, FX_MODE_STATIC, WHITE, 0);
 			is_strobe = 1;
-
 			break;
 		case 2:
 			ws2812fx.setSegment(SEG_1, FX_MODE_COLOR_WIPE, color_1, 3000);
@@ -199,7 +199,6 @@ void DMX_task(void* parameter) {
 						print_info = 1;
 						lastUpdate = now;
 					}
-
 					ctn = 0;
 					int new_anim = anim;
 
@@ -271,6 +270,7 @@ void DMX_task(void* parameter) {
 
 					if (anim == 0 || anim == 1) { // static or strob
 						speed = 0;
+						ws2812fx.setAllSpeed(speed);
 					} else {
 						int new_speed = 2650 - DMX::Read(dmx_adress + DMX_CHANNEL_SPEED) * 10;
 						if (speed != new_speed) {
@@ -283,6 +283,7 @@ void DMX_task(void* parameter) {
 					new_speed = map(new_speed, 0, 255, 200, 1000);
 					if (strobe_speed != new_speed) {
 						strobe_speed = new_speed;
+						strob_ctn = 0;
 					}
 
 					if (print_info) {
@@ -307,6 +308,7 @@ void DMX_task(void* parameter) {
 				ws2812fx.resetSegments();
 				ws2812fx.strip_off();
 				bright = 50;
+				blackout = 0;
 				// chase_rainbow();
 				ws2812fx.setSegment(SEG_1, FX_MODE_RAINBOW_CYCLE, color_1, 10);
 			}
@@ -344,15 +346,14 @@ void led_task(void* parameter) {
 	pinMode(LED_STATUS_PIN, OUTPUT);
 	digitalWrite(LED_STATUS_PIN, led_blink);
 	ws2812fx.setCustomShow(myCustomShow); // set the custom show function to forgo the NeoPixel
-	int ctn= 0;
 	for (;;) {
 		ws2812fx.service();
 		if (is_strobe) {
-			ctn++;
-			// Serial.printf("%d\n", ctn);
-			if (ctn > ((strobe_speed) / 100)) {
+			strob_ctn++;
+			// Serial.printf("stob %d > %d %d\n", strob_ctn, ((strobe_speed) / 100), blackout);
+			if (strob_ctn > ((strobe_speed) / 100)) {
 				blackout = !blackout;
-				ctn = 0;
+				strob_ctn = 0;
 			}
 		}
 		vTaskDelay(1 / portTICK_PERIOD_MS);
