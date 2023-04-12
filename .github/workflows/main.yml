@@ -37,12 +37,12 @@ jobs:
       run: pio run -e WS2812_960
     - name: Build WS2812_2048
       run: pio run -e WS2812_2048
-    - name: Build WS2812_V4_480
-      run: pio run -e WS2812_V4_480
-    - name: Build WS2812_V4_960
-      run: pio run -e WS2812_V4_960
-    - name: Build WS2812_V4_2048
-      run: pio run -e WS2812_V4_2048
+    - name: Build DMX2LEDs_V4_WS2812_480
+      run: pio run -e DMX2LEDs_V4_WS2812_480
+    - name: Build DMX2LEDs_V4_WS2812_960
+      run: pio run -e DMX2LEDs_V4_WS2812_960
+    - name: Build DMX2LEDs_V4_WS2812_2048
+      run: pio run -e DMX2LEDs_V4_WS2812_2048
     - name: Deploy
       env:
         SUPER_SECRET: ${{ secrets.TOKEN }} 
