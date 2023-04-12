@@ -61,9 +61,9 @@ jobs:
         curl -sSF file=@DMX2LEDs_carre_1.bin 'http://antoine.doussaud.org:25478/upload?token='$SUPER_SECRET
         curl -sSF file=@DMX2LEDs_carre_2.bin 'http://antoine.doussaud.org:25478/upload?token='$SUPER_SECRET
 
-        curl -sSF file=@DMX2LEDs_V4_WS2812_480.bin  'http://antoine.doussaud.org:25478/upload?token='$SUPER_SECRET
-        curl -sSF file=@DMX2LEDs_V4_WS2812_960.bin  'http://antoine.doussaud.org:25478/upload?token='$SUPER_SECRET
-        curl -sSF file=@DMX2LEDs_V4_WS2812_2048.bin 'http://antoine.doussaud.org:25478/upload?token='$SUPER_SECRET
+        curl -sSF file=@DMX2LEDs_WS2812_480.bin  'http://antoine.doussaud.org:25478/upload?token='$SUPER_SECRET
+        curl -sSF file=@DMX2LEDs_WS2812_960.bin  'http://antoine.doussaud.org:25478/upload?token='$SUPER_SECRET
+        curl -sSF file=@DMX2LEDs_WS2812_2048.bin 'http://antoine.doussaud.org:25478/upload?token='$SUPER_SECRET
 
         curl -sSF file=@DMX2LEDs_V4_WS2812_480.bin  'http://antoine.doussaud.org:25478/upload?token='$SUPER_SECRET
         curl -sSF file=@DMX2LEDs_V4_WS2812_960.bin  'http://antoine.doussaud.org:25478/upload?token='$SUPER_SECRET
