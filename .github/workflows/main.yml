@@ -58,18 +58,18 @@ jobs:
         mv .pio/build/DMX2LEDs_V4_WS2812_960/firmware.bin     DMX2LEDs_V4_WS2812_960.bin
         mv .pio/build/DMX2LEDs_V4_WS2812_2048/firmware.bin    DMX2LEDs_V4_WS2812_2048.bin
 
-        curl -sSF file=@DMX2LEDs_carre_1.bin 'http://antoine.doussaud.org:25478/upload?token='$SUPER_SECRET
-        curl -sSF file=@DMX2LEDs_carre_2.bin 'http://antoine.doussaud.org:25478/upload?token='$SUPER_SECRET
+        curl -sSF file=@DMX2LEDs_carre_1.bin 'https://antoine.doussaud.org:25478/upload?token='$SUPER_SECRET
+        curl -sSF file=@DMX2LEDs_carre_2.bin 'https://antoine.doussaud.org:25478/upload?token='$SUPER_SECRET
 
-        curl -sSF file=@DMX2LEDs_WS2812_480.bin  'http://antoine.doussaud.org:25478/upload?token='$SUPER_SECRET
-        curl -sSF file=@DMX2LEDs_WS2812_960.bin  'http://antoine.doussaud.org:25478/upload?token='$SUPER_SECRET
-        curl -sSF file=@DMX2LEDs_WS2812_2048.bin 'http://antoine.doussaud.org:25478/upload?token='$SUPER_SECRET
+        curl -sSF file=@DMX2LEDs_WS2812_480.bin  'https://antoine.doussaud.org:25478/upload?token='$SUPER_SECRET
+        curl -sSF file=@DMX2LEDs_WS2812_960.bin  'https://antoine.doussaud.org:25478/upload?token='$SUPER_SECRET
+        curl -sSF file=@DMX2LEDs_WS2812_2048.bin 'https://antoine.doussaud.org:25478/upload?token='$SUPER_SECRET
 
-        curl -sSF file=@DMX2LEDs_V4_WS2812_480.bin  'http://antoine.doussaud.org:25478/upload?token='$SUPER_SECRET
-        curl -sSF file=@DMX2LEDs_V4_WS2812_960.bin  'http://antoine.doussaud.org:25478/upload?token='$SUPER_SECRET
-        curl -sSF file=@DMX2LEDs_V4_WS2812_2048.bin 'http://antoine.doussaud.org:25478/upload?token='$SUPER_SECRET
+        curl -sSF file=@DMX2LEDs_V4_WS2812_480.bin  'https://antoine.doussaud.org:25478/upload?token='$SUPER_SECRET
+        curl -sSF file=@DMX2LEDs_V4_WS2812_960.bin  'https://antoine.doussaud.org:25478/upload?token='$SUPER_SECRET
+        curl -sSF file=@DMX2LEDs_V4_WS2812_2048.bin 'https://antoine.doussaud.org:25478/upload?token='$SUPER_SECRET
 
         echo `TZ="Europe/Paris" date '+%F %T'`" git:"`git rev-parse --short HEAD` > DMX2LEDs.info
-        curl -sSF file=@DMX2LEDs.info 'http://antoine.doussaud.org:25478/upload?token='$SUPER_SECRET
+        curl -sSF file=@DMX2LEDs.info 'https://antoine.doussaud.org:25478/upload?token='$SUPER_SECRET
 
 
