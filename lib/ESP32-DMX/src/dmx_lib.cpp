@@ -15,7 +15,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <dmx.h>
+#include <dmx_lib.h>
 
 #include "driver/gpio.h"
 #include "driver/uart.h"
@@ -34,24 +34,24 @@
 
 #define DMX_IGNORE_THREADSAFETY 0           // set to 1 to disable all threadsafe mechanisms
 
-QueueHandle_t DMX::dmx_rx_queue;
+QueueHandle_t DMXLibrary::dmx_rx_queue;
 
-SemaphoreHandle_t DMX::sync_dmx;
+SemaphoreHandle_t DMXLibrary::sync_dmx;
 
-DMXState DMX::dmx_state = DMX_IDLE;
+DMXState DMXLibrary::dmx_state = DMX_IDLE;
 
-uint16_t DMX::current_rx_addr = 0;
+uint16_t DMXLibrary::current_rx_addr = 0;
 
-long DMX::last_dmx_packet = 0;
+long DMXLibrary::last_dmx_packet = 0;
 
-uint8_t DMX::dmx_data[513];
+uint8_t DMXLibrary::dmx_data[513];
 
-DMX::DMX()
+DMXLibrary::DMXLibrary()
 {
 
 }
 
-void DMX::Initialize(DMXDirection direction)
+void DMXLibrary::Initialize(DMXDirection direction)
 {
     // configure UART for DMX
     uart_config_t uart_config =
@@ -85,7 +85,7 @@ void DMX::Initialize(DMXDirection direction)
         dmx_state = DMX_OUTPUT;
         
         // create send task
-        xTaskCreatePinnedToCore(DMX::uart_send_task, "uart_send_task", 1024, NULL, 1, NULL, DMX_CORE);
+        xTaskCreatePinnedToCore(DMXLibrary::uart_send_task, "uart_send_task", 1024, NULL, 1, NULL, DMX_CORE);
     }
     else
     {    
@@ -93,11 +93,11 @@ void DMX::Initialize(DMXDirection direction)
         dmx_state = DMX_IDLE;
 
         // create receive task
-        xTaskCreatePinnedToCore(DMX::uart_event_task, "uart_event_task", 2048, NULL, 1, NULL, DMX_CORE);
+        xTaskCreatePinnedToCore(DMXLibrary::uart_event_task, "uart_event_task", 2048, NULL, 1, NULL, DMX_CORE);
     }
 }
 
-uint8_t DMX::Read(uint16_t channel)
+uint8_t DMXLibrary::Read(uint16_t channel)
 {
     // restrict acces to dmx array to valid values
     if(channel < 1 || channel > 512)
@@ -116,7 +116,7 @@ uint8_t DMX::Read(uint16_t channel)
     return tmp_dmx;
 }
 
-void DMX::ReadAll(uint8_t * data, uint16_t start, size_t size)
+void DMXLibrary::ReadAll(uint8_t * data, uint16_t start, size_t size)
 {
     // restrict acces to dmx array to valid values
     if(start < 1 || start > 512 || start + size > 513)
@@ -132,7 +132,7 @@ void DMX::ReadAll(uint8_t * data, uint16_t start, size_t size)
 #endif
 }
 
-void DMX::Write(uint16_t channel, uint8_t value)
+void DMXLibrary::Write(uint16_t channel, uint8_t value)
 {
     // restrict acces to dmx array to valid values
     if(channel < 1 || channel > 512)
@@ -149,7 +149,7 @@ void DMX::Write(uint16_t channel, uint8_t value)
 #endif
 }
 
-void DMX::WriteAll(uint8_t * data, uint16_t start, size_t size)
+void DMXLibrary::WriteAll(uint8_t * data, uint16_t start, size_t size)
 {
     // restrict acces to dmx array to valid values
     if(start < 1 || start > 512 || start + size > 513)
@@ -165,7 +165,7 @@ void DMX::WriteAll(uint8_t * data, uint16_t start, size_t size)
 #endif
 }
 
-uint8_t DMX::IsHealthy()
+uint8_t DMXLibrary::IsHealthy()
 {
     // get timestamp of last received packet
 #ifndef DMX_IGNORE_THREADSAFETY
@@ -183,7 +183,7 @@ uint8_t DMX::IsHealthy()
     return 0;
 }
 
-void DMX::uart_send_task(void*pvParameters)
+void DMXLibrary::uart_send_task(void*pvParameters)
 {
     uint8_t start_code = 0x00;
     for(;;)
@@ -211,7 +211,7 @@ void DMX::uart_send_task(void*pvParameters)
     }
 }
 
-void DMX::uart_event_task(void *pvParameters)
+void DMXLibrary::uart_event_task(void *pvParameters)
 {
     uart_event_t event;
     uint8_t* dtmp = (uint8_t*) malloc(BUF_SIZE);

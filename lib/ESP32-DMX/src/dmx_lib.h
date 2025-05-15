@@ -29,7 +29,7 @@
 enum DMXDirection { input, output };
 enum DMXState { DMX_IDLE, DMX_BREAK, DMX_DATA, DMX_OUTPUT };
 
-class DMX
+class DMXLibrary
 {
     public:
         static void Initialize(DMXDirection direction);     // initialize library
@@ -45,7 +45,7 @@ class DMX
         static uint8_t IsHealthy();                            // returns true, when a valid DMX signal was received within the last 500ms
         
     private:
-        DMX();                                              // hide constructor
+        DMXLibrary();                                              // hide constructor
 
         static QueueHandle_t dmx_rx_queue;                  // queue for uart rx events
         
