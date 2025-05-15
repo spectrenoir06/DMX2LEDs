@@ -5,6 +5,9 @@
 #include <FastLED.h>
 #include <dmx_lib.h>
 
+#define COLOR_ORDER BRG
+#define LEDS_TYPE WS2812B
+
 #define TOTAL_CHANNELS 512
 
 uint8_t led_blink = 0;
@@ -31,14 +34,12 @@ uint8_t led_blink = 0;
 
 #define DMX_CHANNEL_LITE_ANIM    ( 6)
 
-WS2812FX ws2812fx    = WS2812FX(LED_COUNT, LED_PIN_1, LEDS_TYPE, 20, 20);
-WS2812FX ws2812fx_p  = WS2812FX(LED_COUNT, LED_PIN_1, LEDS_TYPE, 1, 1);
-
 uint32_t color_1 = 0xFF0000;
 int32_t  speed = 0;
 int32_t  strobe_speed =0;
 uint8_t  is_strobe = 0;
 uint32_t strob_ctn = 0;
+uint8_t is_full_mode = 1;
 unsigned long lastUpdate = millis();
 
 #define LED_PORT_0 LED_PIN_1
@@ -51,8 +52,8 @@ unsigned long lastUpdate = millis();
 #define LED_PORT_6 LED_PIN_7
 #define LED_PORT_7 LED_PIN_8
 
-#define LED_PORT_0_NB_PIXEL 376
-#define LED_PORT_1_NB_PIXEL 0
+#define LED_PORT_0_NB_PIXEL 200
+#define LED_PORT_1_NB_PIXEL 200
 #define LED_PORT_2_NB_PIXEL 0
 #define LED_PORT_3_NB_PIXEL 0
 #define LED_PORT_4_NB_PIXEL 0
@@ -70,17 +71,12 @@ unsigned long lastUpdate = millis();
 #define LED_PORT_6_OFF (LED_PORT_0_NB_PIXEL + LED_PORT_1_NB_PIXEL + LED_PORT_2_NB_PIXEL + LED_PORT_3_NB_PIXEL + LED_PORT_4_NB_PIXEL + LED_PORT_5_NB_PIXEL)
 #define LED_PORT_7_OFF (LED_PORT_0_NB_PIXEL + LED_PORT_1_NB_PIXEL + LED_PORT_2_NB_PIXEL + LED_PORT_3_NB_PIXEL + LED_PORT_4_NB_PIXEL + LED_PORT_5_NB_PIXEL + LED_PORT_6_NB_PIXEL)
 
+#define LED_NB_PIXEL (LED_PORT_0_NB_PIXEL + LED_PORT_1_NB_PIXEL + LED_PORT_2_NB_PIXEL + LED_PORT_3_NB_PIXEL + LED_PORT_4_NB_PIXEL + LED_PORT_5_NB_PIXEL + LED_PORT_6_NB_PIXEL + LED_PORT_7_NB_PIXEL)
 
-CRGB leds[
-	LED_PORT_0_NB_PIXEL
-	+ LED_PORT_1_NB_PIXEL
-	+ LED_PORT_2_NB_PIXEL
-	+ LED_PORT_3_NB_PIXEL
-	+ LED_PORT_4_NB_PIXEL
-	+ LED_PORT_5_NB_PIXEL
-	+ LED_PORT_6_NB_PIXEL
-	+ LED_PORT_7_NB_PIXEL
-];
+CRGB leds[LED_NB_PIXEL];
+
+WS2812FX ws2812fx = WS2812FX(LED_NB_PIXEL, LED_PIN_8, NEO_RGB, 20, 20);
+
 
 typedef struct segment_structure {
 	uint32_t output;
@@ -91,11 +87,14 @@ typedef struct segment_structure {
 
 
 segment_structure mapping[] = {
-	{.output = 0, .pixel = 0, .start = 0,    .stop = 134},
-	{.output = 0, .pixel = 1, .start = 135,   .stop = 212},
-	{.output = 0, .pixel = 2, .start = 213,   .stop = 291},
-	{.output = 0, .pixel = 3, .start = 292,   .stop = 375},
-	// {.output = 0, .pixel = 4, .start = 400,   .stop = 500}
+	{.output = 0, .pixel = 0, .start = 0,    .stop = 9},
+	{.output = 0, .pixel = 1, .start = 10,   .stop = 19},
+	{.output = 0, .pixel = 2, .start = 20,   .stop = 29},
+	{.output = 0, .pixel = 3, .start = 30,   .stop = 39},
+	{.output = 0, .pixel = 4, .start = 40,   .stop = 49},
+	{.output = 0, .pixel = 5, .start = 50,   .stop = 59},
+	{.output = 0, .pixel = 6, .start = 60,   .stop = 69},
+	{.output = 0, .pixel = 7, .start = 70,   .stop = 79}	
 };
 
 uint32_t off_table[] = {
@@ -167,43 +166,60 @@ uint8_t snakeMode = ws2812fx.setCustomMode(F("snake mode"), snake);
 uint8_t snakeMode2 = ws2812fx.setCustomMode(F("snake mode 2"), snake2);
 
 
-#define SEG_1  0, 0, (LED_COUNT-1)	
+#define SEG_1  0, 0, (LED_NB_PIXEL-1)	
 
 void start_anim(uint8_t anim) {
 	switch (anim) {
 		case 0: // static 
+			is_full_mode = 1;
 			ws2812fx.setSegment(SEG_1, FX_MODE_STATIC, color_1, 0);
 			break;
 		case 1: // strobe white
 			// ws2812fx.setSegment(SEG_1, FX_MODE_BLINK, WHITE, 200);
-			ws2812fx.setSegment(SEG_1, FX_MODE_STATIC, WHITE, 0);
+			is_full_mode = 1;
 			is_strobe = 1;
+			ws2812fx.setSegment(SEG_1, FX_MODE_STATIC, WHITE, 0);
 			break;
 		case 2:
+			is_full_mode = 1;
 			ws2812fx.setSegment(SEG_1, FX_MODE_COLOR_WIPE, color_1, 3000);
 			break;
 		case 3:
+			is_full_mode = 1;
 			ws2812fx.setSegment(SEG_1, FX_MODE_THEATER_CHASE, color_1, 50);
 			break;
 		case 4:
+
+			is_full_mode = 1;
 			ws2812fx.setSegment(SEG_1, FX_MODE_FIREWORKS);
 			break;
 		case 5:
+
+			is_full_mode = 1;
 			ws2812fx.setSegment(SEG_1, FX_MODE_RUNNING_LIGHTS);
 			break;
 		case 6:
+
+			is_full_mode = 1;
 			ws2812fx.setSegment(SEG_1, FX_MODE_TWINKLEFOX);
 			break;
 		case 7:
+
+			is_full_mode = 1;
 			ws2812fx.setSegment(SEG_1, FX_MODE_FIRE_FLICKER);
 			break;
 		case 8:
+
+			is_full_mode = 1;
 			ws2812fx.setSegment(SEG_1, FX_MODE_COMET);
 			break;
 		case 9:
+
+			is_full_mode = 1;
 			ws2812fx.setSegment(SEG_1, snakeMode2, color_1, 10);
 			break;
 		case 10:
+			is_full_mode = 1;
 			ws2812fx.setSegment(SEG_1, snakeMode, color_1, 10);
 			break;
 	}
@@ -212,6 +228,10 @@ void start_anim(uint8_t anim) {
 int anim = 255;
 uint8_t bright = 255;
 uint8_t blackout = 0;
+
+void myCustomShow(void);
+void myCustomShowMapping(void);
+
 
 void DMX_task(void* parameter) {
 	Serial.printf("Task DMX start\n");
@@ -318,7 +338,12 @@ void DMX_task(void* parameter) {
 						anim = new_anim;
 						ws2812fx.resetSegments();
 						ws2812fx.strip_off();
+						
 						start_anim(anim);
+						if (is_full_mode)
+							ws2812fx.setCustomShow(myCustomShow);
+						else
+							ws2812fx.setCustomShow(myCustomShowMapping);
 						ws2812fx.setAllSpeed(speed);
 					}
 
@@ -401,28 +426,57 @@ void DMX_task(void* parameter) {
 
 void myCustomShow(void) {
 	uint8_t* pixels_v1 = ws2812fx.getPixels();
-	uint8_t* pixels_p = ws2812fx_p.getPixels();
+	memcpy(leds, ws2812fx.getPixels(), sizeof(leds));
 
-	for (int i = 0; i < ws2812fx_p.getNumBytes(); i++) {
-		uint32_t p = pixels_v1[i];
-		if (blackout)
-			p = 0;
-		else
-			p = (p * bright) >> 8;
-		pixels_p[i] = p;
+	if (blackout)
+		FastLED.setBrightness(0);
+	else
+		FastLED.setBrightness(bright);
+
+	FastLED.show();
+}
+
+void myCustomShowMapping(void) {
+	uint8_t* pixels_v1 = ws2812fx.getPixels();
+	uint32_t nb_seg = (sizeof(mapping)/sizeof(segment_structure));
+
+	for (int i = 0; i < nb_seg; i++) {
+		for (int x = mapping[i].start; x <= mapping[i].stop; x++) {
+			leds[off_table[mapping[i].output] + x] = CRGB(
+				pixels_v1[mapping[i].pixel*3+0],
+				pixels_v1[mapping[i].pixel*3+1],
+				pixels_v1[mapping[i].pixel*3+2]
+			);
+		}
 	}
-	ws2812fx_p.Adafruit_NeoPixel::show();
+	if (blackout)
+		FastLED.setBrightness(0);
+	else
+		FastLED.setBrightness(bright);
+	FastLED.show();
 }
 
 
+void mapMode() {
+	FastLED.clear();
+	ws2812fx.setCustomShow(myCustomShowMapping); ws2812fx.resetSegments(); ws2812fx.strip_off();
+}
+
+void fullMode() {
+	FastLED.clear();
+	ws2812fx.setCustomShow(myCustomShow); ws2812fx.resetSegments(); ws2812fx.strip_off();
+}
+
 void led_task(void* parameter) {
 	Serial.printf("Task LED start\n");
-	ws2812fx_p.init();
 
+	LEDS.addLeds<LEDS_TYPE, LED_PORT_0, COLOR_ORDER>((CRGB*)leds, LED_PORT_0_OFF, LED_PORT_0_NB_PIXEL);
+	LEDS.addLeds<LEDS_TYPE, LED_PORT_1, COLOR_ORDER>((CRGB*)leds, LED_PORT_1_OFF, LED_PORT_1_NB_PIXEL);
+	
 	ws2812fx.init();
 	ws2812fx.setBrightness(255);
 	ws2812fx.start();
-	ws2812fx.setCustomShow(myCustomShow); // set the custom show function to forgo the NeoPixel
+	ws2812fx.setCustomShow(myCustomShowMapping); // set the custom show function to forgo the NeoPixel
 
 	pinMode(LED_STATUS_PIN, OUTPUT);
 	digitalWrite(LED_STATUS_PIN, led_blink);
