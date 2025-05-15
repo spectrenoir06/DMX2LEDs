@@ -12,10 +12,10 @@ uint8_t led_blink = 0;
 #define DMX_CHANNEL_COLOR_1_B    ( 3)
 #define DMX_CHANNEL_BRIGHT       ( 4)
 #define DMX_CHANNEL_SPEED        ( 5)
-#define DMX_CHANNEL_STROBE_SPEED ( 6)
+#define DMX_CHANNEL_STROBE       ( 6)
 
 #define DMX_CHANNEL_STROBE_G     ( 7)
-#define DMX_CHANNEL_STROBE       ( 8)
+#define DMX_CHANNEL_STROBE_SPEED ( 8)
 #define DMX_CHANNEL_MODE_1       ( 9)
 #define DMX_CHANNEL_MODE_2       (10)
 #define DMX_CHANNEL_MODE_3       (11)
@@ -27,7 +27,7 @@ uint8_t led_blink = 0;
 #define DMX_CHANNEL_MODE_8       (16)
 #define DMX_CHANNEL_MODE_9       (17)
 
-#define DMX_CHANNEL_LITE_ANIM    ( 8)
+#define DMX_CHANNEL_LITE_ANIM    ( 6)
 
 WS2812FX ws2812fx    = WS2812FX(LED_COUNT, LED_PIN_1, LEDS_TYPE, 20, 20);
 WS2812FX ws2812fx_p  = WS2812FX(LED_COUNT, LED_PIN_1, LEDS_TYPE, 1, 1);
