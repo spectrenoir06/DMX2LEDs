@@ -95,18 +95,46 @@ typedef struct segment_structure {
 } segment_structure;
 
 
-segment_structure mapping[] = {
-	{.output = 0, .pixel = 0, .start = 0,    .stop = 9},
-	{.output = 0, .pixel = 1, .start = 10,   .stop = 19},
-	{.output = 0, .pixel = 2, .start = 20,   .stop = 29},
-	{.output = 0, .pixel = 3, .start = 30,   .stop = 39},
-	{.output = 0, .pixel = 4, .start = 40,   .stop = 49},
+// segment_structure mapping[] = {
+// 	{.output = 0, .pixel = 0, .start = 0,    .stop = 9},
+// 	{.output = 0, .pixel = 1, .start = 10,   .stop = 19},
+// 	{.output = 0, .pixel = 2, .start = 20,   .stop = 29},
+// 	{.output = 0, .pixel = 3, .start = 30,   .stop = 39},
+// 	{.output = 0, .pixel = 4, .start = 40,   .stop = 49},
 
-	{.output = 1, .pixel = 5, .start = 0,    .stop = 4},
-	{.output = 1, .pixel = 6, .start = 5,    .stop = 9},
-	{.output = 1, .pixel = 7, .start = 10,   .stop = 14},
-	{.output = 1, .pixel = 8, .start = 15,   .stop = 19},
-	{.output = 1, .pixel = 9, .start = 20,   .stop = 24}
+// 	{.output = 1, .pixel = 5, .start = 0,    .stop = 4},
+// 	{.output = 1, .pixel = 6, .start = 5,    .stop = 9},
+// 	{.output = 1, .pixel = 7, .start = 10,   .stop = 14},
+// 	{.output = 1, .pixel = 8, .start = 15,   .stop = 19},
+// 	{.output = 1, .pixel = 9, .start = 20,   .stop = 24}
+// };
+
+// background ( 399 LEDs )
+// F : 85
+// O : 70
+// L1: 75
+// L2: 74
+// E : 95
+
+// lightbulb ( 55 )
+// F: 13
+// O: 16
+// L1: 11
+// L2: 11
+// E: 15
+
+segment_structure mapping[] = {
+	{.output = 0, .pixel = 0, .start = 0,    .stop = 85-1},
+	{.output = 0, .pixel = 1, .start = 85,   .stop = (85 + 70-1)},
+	{.output = 0, .pixel = 2, .start = (85 + 70),   .stop = (85 + 70 + 75-1)},
+	{.output = 0, .pixel = 3, .start = (85 + 70 + 75),   .stop = (85 + 70 + 75 + 74-1)},
+	{.output = 0, .pixel = 4, .start = (85 + 70 + 75 + 74),   .stop = (85 + 70 + 75 + 74 + 95-1)},
+
+	{.output = 1, .pixel = 5, .start = 0,    .stop = (13-1)},
+	{.output = 1, .pixel = 6, .start = 13,   .stop = (13 + 16-1)},
+	{.output = 1, .pixel = 7, .start = (+ 13 + 16),   .stop = (13 + 16 + 11-1)},
+	{.output = 1, .pixel = 8, .start = (13 + 16 + 11),   .stop = (13 + 16 + 11 + 11-1)},
+	{.output = 1, .pixel = 9, .start = (13 + 16 + 11 + 11),   .stop = (13 + 16 + 11 + 11 + 15-1)}
 };
 
 uint32_t off_table[] = {
@@ -461,7 +489,7 @@ void DMX_task(void* parameter) {
 
 					// if (lite_mode) {
 						// Serial.printf("LITE\n");
-						new_anim = DMXLibrary::Read(dmx_adress + DMX_CHANNEL_LITE_ANIM) / 20; // 0-13
+						new_anim = DMXLibrary::Read(dmx_adress + DMX_CHANNEL_LITE_ANIM) / 19; // 0-13
 						// if (new_anim > 10)
 						// 	new_anim = 0;
 					// } else {
