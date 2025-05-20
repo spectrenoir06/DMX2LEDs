@@ -20,6 +20,16 @@ uint8_t led_blink = 0;
 #define DMX_CHANNEL_COLOR_1_B    ( 3)
 #define DMX_CHANNEL_BRIGHT       ( 4)
 #define DMX_CHANNEL_SPEED        ( 5)
+#define DMX_CHANNEL_LITE_ANIM    ( 6)
+
+
+#define DMX_CHANNEL_F        ( 7)
+#define DMX_CHANNEL_O        ( 8)
+#define DMX_CHANNEL_L1        ( 9)
+#define DMX_CHANNEL_L2        ( 10)
+#define DMX_CHANNEL_E        ( 11)
+
+
 // #define DMX_CHANNEL_STROBE       ( 6)
 
 // #define DMX_CHANNEL_STROBE_G     ( 7)
@@ -35,7 +45,6 @@ uint8_t led_blink = 0;
 // #define DMX_CHANNEL_MODE_8       (16)
 // #define DMX_CHANNEL_MODE_9       (17)
 
-#define DMX_CHANNEL_LITE_ANIM    ( 6)
 
 uint32_t color_1 = 0xFF0000;
 int32_t  speed = 0;
@@ -47,6 +56,7 @@ unsigned long lastUpdate = millis();
 int anim = 255;
 uint8_t bright = 255;
 uint8_t blackout = 0;
+uint8_t letter_mode = 0;
 
 
 #define LED_PORT_0 LED_PIN_1
@@ -60,7 +70,7 @@ uint8_t blackout = 0;
 #define LED_PORT_7 LED_PIN_8
 
 #define LED_PORT_0_NB_PIXEL 399
-#define LED_PORT_1_NB_PIXEL 55
+#define LED_PORT_1_NB_PIXEL (55+11)
 #define LED_PORT_2_NB_PIXEL 0
 #define LED_PORT_3_NB_PIXEL 0
 #define LED_PORT_4_NB_PIXEL 0
@@ -186,6 +196,16 @@ uint16_t snake(void) { // random chase
 int snake_size = 10;
 
 
+uint16_t anim_off(void) {
+	WS2812FX::Segment* seg = ws2812fx.getSegment(); // get the current segment 
+
+	for (uint16_t i = seg->start; i <= seg->stop; i++)
+		ws2812fx.setPixelColor(i, 0);
+
+	return (seg->speed / 25); // return the delay until the next animation step (in msec)
+}
+
+
 uint16_t snake2(void) { // random chase
 	static uint32_t pos_x = 0;
 	WS2812FX::Segment* seg = ws2812fx.getSegment(); // get the current segment
@@ -204,6 +224,7 @@ uint16_t snake2(void) { // random chase
 
 uint8_t snakeMode = ws2812fx.setCustomMode(F("snake mode"), snake);
 uint8_t snakeMode2 = ws2812fx.setCustomMode(F("snake mode 2"), snake2);
+uint8_t animOff = ws2812fx.setCustomMode(F("anim off"), anim_off);
 
 
 // #define SEG_1  0, 0, (LED_NB_PIXEL-1)
@@ -326,7 +347,7 @@ void start_anim(uint8_t anim) {
 			ws2812fx.setSegment(E_B, FX_MODE_COLOR_WIPE_INV, color_1, 3000);
 			break;
 
-		case 7:
+		case 7: // 
 			is_full_mode = 1;
 			ws2812fx.setSegment(F_L, FX_MODE_COLOR_WIPE_INV, color_1, 3000);
 			ws2812fx.setSegment(O_L, FX_MODE_COLOR_WIPE_INV, color_1, 3000);
@@ -341,7 +362,7 @@ void start_anim(uint8_t anim) {
 			ws2812fx.setSegment(E_B, FX_MODE_COLOR_WIPE_INV, color_1, 3000);
 			break;
 
-		case 8:
+		case 8: // theater chase
 			is_full_mode = 1;
 			ws2812fx.setSegment(F_L, FX_MODE_THEATER_CHASE, color_1, 3000);
 			ws2812fx.setSegment(O_L, FX_MODE_THEATER_CHASE, color_1, 3000);
@@ -355,7 +376,7 @@ void start_anim(uint8_t anim) {
 			ws2812fx.setSegment(L2_B, FX_MODE_THEATER_CHASE, color_1, 3000);
 			ws2812fx.setSegment(E_B, FX_MODE_THEATER_CHASE, color_1, 3000);
 			break;
-		case 9: // neon cassé
+		case 9: // multi strobe
 			ws2812fx.setSegment(ALL_LED, FX_MODE_MULTI_STROBE, color_1, 3000);
 
 			is_full_mode = 1;
@@ -379,6 +400,12 @@ void start_anim(uint8_t anim) {
 		case 13: // FX_MODE_RUNNING_LIGHTS
 			is_full_mode = 1;
 			ws2812fx.setSegment(ALL_LED, FX_MODE_RUNNING_LIGHTS, color_1, 50);
+			break;
+		
+		case 14:
+			is_full_mode = 1;
+			ws2812fx.setSegment(O_B, FX_MODE_RAINBOW_CYCLE, color_1, 50);
+			ws2812fx.setSegment(O_L, FX_MODE_RAINBOW_CYCLE, color_1, 50);
 			break;
 
 
@@ -487,43 +514,84 @@ void DMX_task(void* parameter) {
 					ctn = 0;
 					int new_anim = anim;
 
-					// if (lite_mode) {
-						// Serial.printf("LITE\n");
-						new_anim = DMXLibrary::Read(dmx_adress + DMX_CHANNEL_LITE_ANIM) / 19; // 0-13
-						// if (new_anim > 10)
-						// 	new_anim = 0;
-					// } else {
-					// 	if (DMXLibrary::Read(dmx_adress + DMX_CHANNEL_STROBE) > 127) // strobo white
-					// 		new_anim = 1;
-					// 	else if (DMXLibrary::Read(dmx_adress + DMX_CHANNEL_MODE_1) > 127)
-					// 		new_anim = 2;
-					// 	else if (DMXLibrary::Read(dmx_adress + DMX_CHANNEL_MODE_2) > 127)
-					// 		new_anim = 3;
-					// 	else if (DMXLibrary::Read(dmx_adress + DMX_CHANNEL_MODE_3) > 127)
-					// 		new_anim = 4;
-					// 	else if (DMXLibrary::Read(dmx_adress + DMX_CHANNEL_MODE_4) > 127)
-					// 		new_anim = 5;
-					// 	else if (DMXLibrary::Read(dmx_adress + DMX_CHANNEL_MODE_5) > 127)
-					// 		new_anim = 6;
-					// 	else if (DMXLibrary::Read(dmx_adress + DMX_CHANNEL_MODE_6) > 127)
-					// 		new_anim = 7;
-					// 	else if (DMXLibrary::Read(dmx_adress + DMX_CHANNEL_MODE_7) > 127)
-					// 		new_anim = 8;
-					// 	else if (DMXLibrary::Read(dmx_adress + DMX_CHANNEL_MODE_8) > 127)
-					// 		new_anim = 9;
-					// 	else if (DMXLibrary::Read(dmx_adress + DMX_CHANNEL_MODE_9) > 127)
-					// 		new_anim = 10;
-					// 	else
-					// 		new_anim = 0;
-					// }
+					new_anim = DMXLibrary::Read(dmx_adress + DMX_CHANNEL_LITE_ANIM) / 17; // 0-13
+
+					if (DMXLibrary::Read(dmx_adress + DMX_CHANNEL_F) > 10
+					|| DMXLibrary::Read(dmx_adress + DMX_CHANNEL_O) > 10
+					|| DMXLibrary::Read(dmx_adress + DMX_CHANNEL_L1) > 10
+					|| DMXLibrary::Read(dmx_adress + DMX_CHANNEL_L2) > 10
+					|| DMXLibrary::Read(dmx_adress + DMX_CHANNEL_E) > 10)
+					{
+						if (letter_mode == 0) { // set letter mode
+							is_strobe = 0;
+							blackout = 0;
+							ws2812fx.resetSegments();
+							ws2812fx.strip_off();
+
+							// ws2812fx.setSegment(O_L, FX_MODE_STATIC, color_1, 0);
+							// ws2812fx.setSegment(L1_L, FX_MODE_STATIC, color_1, 0);
+							// ws2812fx.setSegment(L2_L, FX_MODE_STATIC, color_1, 0);
+							// ws2812fx.setSegment(E_L, FX_MODE_STATIC, color_1, 0);
+						}
+						if (DMXLibrary::Read(dmx_adress + DMX_CHANNEL_F) > 127) {
+							ws2812fx.setSegment(F_L, FX_MODE_STATIC, color_1, 0);
+							ws2812fx.setSegment(F_B, FX_MODE_STATIC, color_1, 0);
+						} else {
+							ws2812fx.setSegment(F_L, animOff, color_1, 0);
+							ws2812fx.setSegment(F_B, animOff, color_1, 0);
+						}
+
+						if (DMXLibrary::Read(dmx_adress + DMX_CHANNEL_O) > 127) {
+							ws2812fx.setSegment(O_L, FX_MODE_STATIC, color_1, 0);
+							ws2812fx.setSegment(O_B, FX_MODE_STATIC, color_1, 0);
+						} else {
+							ws2812fx.setSegment(O_L, animOff, color_1, 0);
+							ws2812fx.setSegment(O_B, animOff, color_1, 0);
+						}
+
+						if (DMXLibrary::Read(dmx_adress + DMX_CHANNEL_L1) > 127) {
+							ws2812fx.setSegment(L1_L, FX_MODE_STATIC, color_1, 0);
+							ws2812fx.setSegment(L1_B, FX_MODE_STATIC, color_1, 0);
+						} else {
+							ws2812fx.setSegment(L1_L, animOff, color_1, 0);
+							ws2812fx.setSegment(L1_B, animOff, color_1, 0);
+						}
+
+						if (DMXLibrary::Read(dmx_adress + DMX_CHANNEL_L2) > 127) {
+							ws2812fx.setSegment(L2_L, FX_MODE_STATIC, color_1, 0);
+							ws2812fx.setSegment(L2_B, FX_MODE_STATIC, color_1, 0);
+						} else {
+							ws2812fx.setSegment(L2_L, animOff, color_1, 0);
+							ws2812fx.setSegment(L2_B, animOff, color_1, 0);
+						}
+
+						if (DMXLibrary::Read(dmx_adress + DMX_CHANNEL_E) > 127) {
+							ws2812fx.setSegment(E_L, FX_MODE_STATIC, color_1, 0);
+							ws2812fx.setSegment(E_B, FX_MODE_STATIC, color_1, 0);
+						} else {
+							ws2812fx.setSegment(E_L, animOff, color_1, 0);
+							ws2812fx.setSegment(E_B, animOff, color_1, 0);
+						}
+							
+						// if (DMXLibrary::Read(dmx_adress + DMX_CHANNEL_O) > 127) {
+						// 	ws2812fx.setSegment(O_L, FX_MODE_STATIC, color_1, 0);
+						// 	ws2812fx.setSegment(O_B, FX_MODE_STATIC, color_1, 0);
+						// }
+						letter_mode = 1;
 
 
-					if (new_anim != anim) {
-						Serial.printf("New anim %d\n", new_anim);
-						anim = new_anim;
-						start_anim(anim);
-						color_1 = 0;
+
+					} else {
+						if (new_anim != anim || letter_mode) {
+							Serial.printf("New anim %d\n", new_anim);
+							anim = new_anim;
+							start_anim(anim);
+							color_1 = 0;
+						}
+						letter_mode = 0;
 					}
+
+
 
 					// if (DMXLibrary::Read(dmx_adress + DMX_CHANNEL_STROBE_G) > 127 || anim == 1) { // strobo general + strob white
 					// 	is_strobe = 1;
@@ -653,7 +721,7 @@ void led_task(void* parameter) {
 	Serial.printf("Task LED start\n");
 
 	LEDS.addLeds<LEDS_TYPE, LED_PORT_0, COLOR_ORDER>((CRGB*)leds, LED_PORT_0_OFF, LED_PORT_0_NB_PIXEL);
-	LEDS.addLeds<LEDS_TYPE, LED_PORT_1, COLOR_ORDER>((CRGB*)leds, LED_PORT_1_OFF, LED_PORT_1_NB_PIXEL);
+	LEDS.addLeds<LEDS_TYPE, LED_PORT_1, RGB>((CRGB*)leds, LED_PORT_1_OFF, LED_PORT_1_NB_PIXEL);
 	
 	ws2812fx.init();
 	ws2812fx.setBrightness(255);
