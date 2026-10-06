@@ -321,7 +321,7 @@ uint16_t read_dip_address() {
 	return address;
 }
 
-// Same animation on every fixture, used at boot, in test mode and update mode
+// Same animation on every fixture, used in test mode and update mode
 void play_on_all(uint8_t mode, uint16_t speed, uint8_t bright, uint32_t color = 0xFF0000) {
 	for (Fixture& f : fixtures) {
 		reset_fx(f, LAYOUT_LEDS);
@@ -392,11 +392,6 @@ void DMX_task(void* parameter) {
 	#endif
 	Serial.println("DMX initialized...");
 	Serial.printf("Adress DMX: %d, %d fixture(s), %d channels\r\n", read_dip_address(), (int)fixtures.size(), max_dmx_channel);
-
-	// boot animation, until DMX is received
-	xSemaphoreTake(fx_mutex, portMAX_DELAY);
-	play_on_all(FX_MODE_COLOR_WIPE, 3000, 255);
-	xSemaphoreGive(fx_mutex);
 
 	uint8_t ctn = 0;
 	uint8_t test_mode = 0;
@@ -490,6 +485,9 @@ void led_task(void* parameter) {
 		f.fx->init();
 		f.fx->setBrightness(255);
 		f.fx->start();
+		// WS2812FX starts as static red: stay dark until DMX is received, and
+		// send a black frame to clear anything the strip latched during the reset
+		reset_fx(f, LAYOUT_LEDS);
 	}
 	xSemaphoreGive(fx_mutex);
 
