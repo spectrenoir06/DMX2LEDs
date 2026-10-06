@@ -5,461 +5,342 @@
 #include <FastLED.h>
 #include <dmx_lib.h>
 
-void myCustomShow(void);
-void myCustomShowMapping(void);
-
-#define COLOR_ORDER GRB
-#define LEDS_TYPE WS2812B
+// From the config folder selected in platformio.ini (src/configs/<name>/)
+#include "layout.h"
+#include "anims.h"
 
 #define TOTAL_CHANNELS 512
 
-uint8_t led_blink = 0;
-
+// DMX channels, relative to each fixture's block (letter channels are in layout.h)
 #define DMX_CHANNEL_COLOR_1_R    ( 1)
 #define DMX_CHANNEL_COLOR_1_G    ( 2)
 #define DMX_CHANNEL_COLOR_1_B    ( 3)
 #define DMX_CHANNEL_BRIGHT       ( 4)
 #define DMX_CHANNEL_SPEED        ( 5)
-#define DMX_CHANNEL_LITE_ANIM    ( 6)
+#define DMX_CHANNEL_ANIM         ( 6)
 
-
-#define DMX_CHANNEL_F        ( 7)
-#define DMX_CHANNEL_O        ( 8)
-#define DMX_CHANNEL_L1        ( 9)
-#define DMX_CHANNEL_L2        ( 10)
-#define DMX_CHANNEL_E        ( 11)
-
-
-// #define DMX_CHANNEL_STROBE       ( 6)
-
-// #define DMX_CHANNEL_STROBE_G     ( 7)
-// #define DMX_CHANNEL_STROBE_SPEED ( 8)
-// #define DMX_CHANNEL_MODE_1       ( 9)
-// #define DMX_CHANNEL_MODE_2       (10)
-// #define DMX_CHANNEL_MODE_3       (11)
-// #define DMX_CHANNEL_MODE_4       (12)
-
-// #define DMX_CHANNEL_MODE_5       (13)
-// #define DMX_CHANNEL_MODE_6       (14)
-// #define DMX_CHANNEL_MODE_7       (15)
-// #define DMX_CHANNEL_MODE_8       (16)
-// #define DMX_CHANNEL_MODE_9       (17)
-
-
-uint32_t color_1 = 0xFF0000;
-int32_t  speed = 0;
-int32_t  strobe_speed =0;
-uint8_t  is_strobe = 0;
-uint32_t strob_ctn = 0;
-uint8_t is_full_mode = 1;
-unsigned long lastUpdate = millis();
-int anim = 255;
-uint8_t bright = 255;
-uint8_t blackout = 0;
-uint8_t letter_mode = 0;
-
-
-#define LED_PORT_0 LED_PIN_1
-#define LED_PORT_1 LED_PIN_2
-#define LED_PORT_2 LED_PIN_3
-#define LED_PORT_3 LED_PIN_4
-
-#define LED_PORT_4 LED_PIN_5
-#define LED_PORT_5 LED_PIN_6
-#define LED_PORT_6 LED_PIN_7
-#define LED_PORT_7 LED_PIN_8
-
-#define LED_PORT_0_NB_PIXEL 399
-#define LED_PORT_1_NB_PIXEL (55+11)
-#define LED_PORT_2_NB_PIXEL 0
-#define LED_PORT_3_NB_PIXEL 0
-#define LED_PORT_4_NB_PIXEL 0
-#define LED_PORT_5_NB_PIXEL 0
-#define LED_PORT_6_NB_PIXEL 0
-#define LED_PORT_7_NB_PIXEL 0
-
-
-#define LED_PORT_0_OFF (0)
-#define LED_PORT_1_OFF (LED_PORT_0_NB_PIXEL)
-#define LED_PORT_2_OFF (LED_PORT_0_NB_PIXEL + LED_PORT_1_NB_PIXEL)
-#define LED_PORT_3_OFF (LED_PORT_0_NB_PIXEL + LED_PORT_1_NB_PIXEL + LED_PORT_2_NB_PIXEL)
-#define LED_PORT_4_OFF (LED_PORT_0_NB_PIXEL + LED_PORT_1_NB_PIXEL + LED_PORT_2_NB_PIXEL + LED_PORT_3_NB_PIXEL)
-#define LED_PORT_5_OFF (LED_PORT_0_NB_PIXEL + LED_PORT_1_NB_PIXEL + LED_PORT_2_NB_PIXEL + LED_PORT_3_NB_PIXEL + LED_PORT_4_NB_PIXEL)
-#define LED_PORT_6_OFF (LED_PORT_0_NB_PIXEL + LED_PORT_1_NB_PIXEL + LED_PORT_2_NB_PIXEL + LED_PORT_3_NB_PIXEL + LED_PORT_4_NB_PIXEL + LED_PORT_5_NB_PIXEL)
-#define LED_PORT_7_OFF (LED_PORT_0_NB_PIXEL + LED_PORT_1_NB_PIXEL + LED_PORT_2_NB_PIXEL + LED_PORT_3_NB_PIXEL + LED_PORT_4_NB_PIXEL + LED_PORT_5_NB_PIXEL + LED_PORT_6_NB_PIXEL)
-
-#define LED_NB_PIXEL (LED_PORT_0_NB_PIXEL + LED_PORT_1_NB_PIXEL + LED_PORT_2_NB_PIXEL + LED_PORT_3_NB_PIXEL + LED_PORT_4_NB_PIXEL + LED_PORT_5_NB_PIXEL + LED_PORT_6_NB_PIXEL + LED_PORT_7_NB_PIXEL)
-
-CRGB leds[LED_NB_PIXEL];
+constexpr size_t NB_OUTPUTS = sizeof(OUTPUT_SIZES) / sizeof(OUTPUT_SIZES[0]);
+constexpr uint16_t sum(const uint16_t* a, size_t n) { return n == 0 ? 0 : a[n - 1] + sum(a, n - 1); }
+constexpr uint16_t LED_NB_PIXEL = sum(OUTPUT_SIZES, NB_OUTPUTS);
 
 const uint32_t max_num_seg = 20;
 const uint32_t max_num_active_seg = 20;
 
-WS2812FX ws2812fx = WS2812FX(LED_NB_PIXEL, LED_PIN_8, NEO_RGB, max_num_seg, max_num_active_seg);
+static_assert(ZONE_COUNT <= 32, "zones are stored in a 32 bit mask");
 
-typedef struct segment_structure {
-	uint32_t output;
-	uint32_t pixel;
-	uint32_t start;
-	uint32_t stop;
-} segment_structure;
+CRGB leds[LED_NB_PIXEL];
 
+// Computed from layout.h by init_layout()
+uint16_t output_offset[NB_OUTPUTS];
+uint16_t zone_start[ZONE_COUNT];
+uint16_t zone_stop[ZONE_COUNT]; // inclusive
+uint16_t max_dmx_channel = 0;   // last channel used, relative to the DIP address
 
-// segment_structure mapping[] = {
-// 	{.output = 0, .pixel = 0, .start = 0,    .stop = 9},
-// 	{.output = 0, .pixel = 1, .start = 10,   .stop = 19},
-// 	{.output = 0, .pixel = 2, .start = 20,   .stop = 29},
-// 	{.output = 0, .pixel = 3, .start = 30,   .stop = 39},
-// 	{.output = 0, .pixel = 4, .start = 40,   .stop = 49},
-
-// 	{.output = 1, .pixel = 5, .start = 0,    .stop = 4},
-// 	{.output = 1, .pixel = 6, .start = 5,    .stop = 9},
-// 	{.output = 1, .pixel = 7, .start = 10,   .stop = 14},
-// 	{.output = 1, .pixel = 8, .start = 15,   .stop = 19},
-// 	{.output = 1, .pixel = 9, .start = 20,   .stop = 24}
-// };
-
-// background ( 399 LEDs )
-// F : 85
-// O : 70
-// L1: 75
-// L2: 74
-// E : 95
-
-// lightbulb ( 55 )
-// F: 13
-// O: 16
-// L1: 11
-// L2: 11
-// E: 15
-
-segment_structure mapping[] = {
-	{.output = 0, .pixel = 0, .start = 0,    .stop = 85-1},
-	{.output = 0, .pixel = 1, .start = 85,   .stop = (85 + 70-1)},
-	{.output = 0, .pixel = 2, .start = (85 + 70),   .stop = (85 + 70 + 75-1)},
-	{.output = 0, .pixel = 3, .start = (85 + 70 + 75),   .stop = (85 + 70 + 75 + 74-1)},
-	{.output = 0, .pixel = 4, .start = (85 + 70 + 75 + 74),   .stop = (85 + 70 + 75 + 74 + 95-1)},
-
-	{.output = 1, .pixel = 5, .start = 0,    .stop = (13-1)},
-	{.output = 1, .pixel = 6, .start = 13,   .stop = (13 + 16-1)},
-	{.output = 1, .pixel = 7, .start = (+ 13 + 16),   .stop = (13 + 16 + 11-1)},
-	{.output = 1, .pixel = 8, .start = (13 + 16 + 11),   .stop = (13 + 16 + 11 + 11-1)},
-	{.output = 1, .pixel = 9, .start = (13 + 16 + 11 + 11),   .stop = (13 + 16 + 11 + 11 + 15-1)}
+const uint8_t DIP_ADDRESS_PINS[] = {
+	DIP_PIN_0, DIP_PIN_1, DIP_PIN_2, DIP_PIN_3, DIP_PIN_4,
+	DIP_PIN_5, DIP_PIN_6, DIP_PIN_7, DIP_PIN_8
 };
 
-uint32_t off_table[] = {
-	LED_PORT_0_OFF,
-	LED_PORT_1_OFF,
-	LED_PORT_2_OFF,
-	LED_PORT_3_OFF,
-	LED_PORT_4_OFF,
-	LED_PORT_5_OFF,
-	LED_PORT_6_OFF,
-	LED_PORT_7_OFF
+// Runtime state of one fixture of FIXTURES (layout.h)
+struct Fixture {
+	const FixtureDef* def;
+	WS2812FX* fx;        // its own animation engine, one pixel per LED of the fixture
+	uint16_t led_start;  // first LED of the fixture in leds[]
+	uint16_t led_count;
+	Layout   layout = LAYOUT_LEDS;
+
+	uint32_t color = 0xFF0000;
+	int32_t  speed = 0;
+	int32_t  strobe_speed = 0;
+	bool     is_strobe = false;
+	bool     blackout = false;
+	unsigned long last_strobe_toggle = 0;
+	int      anim = 255;
+	uint8_t  bright = 255;
+	bool     letter_mode = false;
+	uint32_t letters_zones_on = 0;
+
+	char     last_log[160] = "";
+	unsigned long last_log_time = 0;
 };
 
-uint32_t nb_LEDs_table[] {
-	LED_PORT_0_NB_PIXEL,
-	LED_PORT_1_NB_PIXEL,
-	LED_PORT_2_NB_PIXEL,
-	LED_PORT_3_NB_PIXEL,
-	LED_PORT_4_NB_PIXEL,
-	LED_PORT_5_NB_PIXEL,
-	LED_PORT_6_NB_PIXEL,
-	LED_PORT_7_NB_PIXEL
-};
+std::vector<Fixture> fixtures;
+WS2812FX* current_fx = nullptr; // see custom_modes.h
+bool leds_dirty = false;        // a fixture changed, leds[] must be rebuilt and sent
+
+// fixtures and the state above are shared between led_task and DMX_task
+SemaphoreHandle_t fx_mutex;
 
 
-uint16_t snake(void) { // random chase
-	static uint8_t snake_ctn = 0;
-	static uint8_t snake_on = 0;
-	WS2812FX::Segment* seg = ws2812fx.getSegment(); // get the current segment 
+// Custom show for every WS2812FX instance: the LED task sends everything at once
+void mark_dirty(void) {
+	leds_dirty = true;
+}
 
-	for (uint16_t i = seg->stop; i > seg->start; i--)
-		ws2812fx.setPixelColor(i, ws2812fx.getPixelColor(i - 1));
-
-	snake_ctn++;
-	if (snake_ctn > 2) {
-		snake_on = !snake_on;
-		snake_ctn = 0;
+void init_layout() {
+	uint16_t next[NB_OUTPUTS];
+	uint16_t offset = 0;
+	for (uint8_t i = 0; i < NB_OUTPUTS; i++) {
+		output_offset[i] = offset;
+		next[i] = offset;
+		offset += OUTPUT_SIZES[i];
 	}
 
-	if (snake_on)
-		ws2812fx.setPixelColor(seg->start, seg->colors[0]);
-	else
-		ws2812fx.setPixelColor(seg->start, 0, 0, 0);
+	for (uint8_t z = 0; z < ZONE_COUNT; z++) {
+		uint8_t out = ZONES[z].output;
+		zone_start[z] = next[out];
+		next[out] += ZONES[z].count;
+		zone_stop[z] = next[out] - 1;
+		if (next[out] > output_offset[out] + OUTPUT_SIZES[out])
+			Serial.printf("Layout error: zone %d overflows output %d\n", z, out);
+	}
 
-	return (seg->speed / 25); // return the delay until the next animation step (in msec)
+	for (const FixtureDef& def : FIXTURES) {
+		Fixture f;
+		f.def = &def;
+		f.led_start = zone_start[def.zones.first];
+		f.led_count = zone_stop[def.zones.last] - f.led_start + 1;
+		// No pin: pixels are sent by FastLED, the instance only computes them
+		f.fx = new WS2812FX(f.led_count, 0, NEO_RGB, max_num_seg, max_num_active_seg);
+		f.fx->setPin(-1);
+		// Set before anything calls show() (setBrightness, strip_off...), which
+		// would otherwise make NeoPixel drive the RMT with the invalid pin.
+		f.fx->setCustomShow(mark_dirty);
+		fixtures.push_back(f);
+
+		uint16_t last_channel = DMX_CHANNEL_ANIM;
+		for (const Letter& l : def.letters)
+			last_channel = max<uint16_t>(last_channel, l.dmx_channel);
+		max_dmx_channel = max<uint16_t>(max_dmx_channel, def.dmx_offset + last_channel);
+	}
 }
 
+// Copy a fixture's pixels into leds[], applying its dim and strobe
+void render(Fixture& f) {
+	const uint8_t* pixels = f.fx->getPixels();
+	CRGB* out = &leds[f.led_start];
 
-int snake_size = 10;
-
-
-uint16_t anim_off(void) {
-	WS2812FX::Segment* seg = ws2812fx.getSegment(); // get the current segment 
-
-	for (uint16_t i = seg->start; i <= seg->stop; i++)
-		ws2812fx.setPixelColor(i, 0);
-
-	return (seg->speed / 25); // return the delay until the next animation step (in msec)
-}
-
-
-uint16_t snake2(void) { // random chase
-	static uint32_t pos_x = 0;
-	WS2812FX::Segment* seg = ws2812fx.getSegment(); // get the current segment
-
-	for (int i = seg->start; i <= seg->stop; i++) // clear
-		ws2812fx.setPixelColor(i, 0);
-
-	for (int i = pos_x; i < pos_x + snake_size; i++)
-		ws2812fx.setPixelColor(i, color_1);
-
-	pos_x++;
-	if (pos_x > seg->stop + snake_size)
-		pos_x = 0;
-	return (seg->speed / 25); // return the delay until the next animation step (in msec)
-}
-
-uint8_t snakeMode = ws2812fx.setCustomMode(F("snake mode"), snake);
-uint8_t snakeMode2 = ws2812fx.setCustomMode(F("snake mode 2"), snake2);
-uint8_t animOff = ws2812fx.setCustomMode(F("anim off"), anim_off);
-
-
-// #define SEG_1  0, 0, (LED_NB_PIXEL-1)
-
-// setSegment(segment index, start LED, stop LED, mode, colors[], speed, reverse);
-
-// background ( 399 LEDs )
-// F : 85
-// O : 70
-// L1: 75
-// L2: 74
-// E : 95
-
-// lightbulb ( 55 )
-// F: 13
-// O: 16
-// L1: 11
-// L2: 11
-// E: 15
-
-#define ALL_LED  0, 0, (LED_NB_PIXEL-1)
-
-
-#define F_B  0, 0, (85-1)
-#define O_B  1, 85, (85 + 70-1)
-#define L1_B 2, (85 + 70), (85 + 70 + 75-1)
-#define L2_B 3, (85 + 70 + 75), (85 + 70 + 75 + 74-1)
-#define E_B  4, (85 + 70 + 75 + 74), (85 + 70 + 75 + 74 + 95-1)
-
-#define F_L  5, LED_PORT_1_OFF+0, (13-1+LED_PORT_1_OFF)
-#define O_L  6, LED_PORT_1_OFF+13, (13 + 16-1+LED_PORT_1_OFF)
-#define L1_L 7, (LED_PORT_1_OFF + 13 + 16), (13 + 16 + 11-1 + LED_PORT_1_OFF)
-#define L2_L 8, (LED_PORT_1_OFF+13 + 16 + 11), (13 + 16 + 11 + 11-1 + LED_PORT_1_OFF)
-#define E_L  9, (LED_PORT_1_OFF+13 + 16 + 11 + 11), (13 + 16 + 11 + 11 + 15-1 + LED_PORT_1_OFF)
-
-# define LETTERS_MAPPING 0, 0, (5-1)
-# define BACK_MAPPING    1, 5, (10-1)
-
-// # define LETTERS 0, 0, (5-1)
-// # define BACK    1, 5, (10-1)
-
-void set_all_speed(uint16_t speed) {
-	for (uint8_t i = 0; i < max_num_active_seg; i++) {
-		if (ws2812fx.getMode() ==  FX_MODE_STATIC) {
-			ws2812fx.setSpeed(i, 1);
-		} else {
-			ws2812fx.setSpeed(i, speed);
+	if (f.layout == LAYOUT_LEDS) {
+		memcpy(out, pixels, f.led_count * sizeof(CRGB));
+	} else { // LAYOUT_ZONES: pixel n colors the whole zone n of the fixture
+		fill_solid(out, f.led_count, CRGB::Black);
+		for (uint8_t z = f.def->zones.first; z <= f.def->zones.last; z++) {
+			uint8_t n = z - f.def->zones.first;
+			fill_solid(&leds[zone_start[z]], ZONES[z].count, CRGB(pixels[n * 3], pixels[n * 3 + 1], pixels[n * 3 + 2]));
 		}
-    }
-}
-
-
-void start_anim(uint8_t anim) {
-	is_strobe = 0;
-	blackout = 0;
-
-	ws2812fx.resetSegments();
-	ws2812fx.strip_off();
-
-	switch (anim) {
-
-		case 0: // static 
-			is_full_mode = 1;
-			ws2812fx.setSegment(ALL_LED, FX_MODE_STATIC, color_1, 0);
-			break;
-
-		case 1: // blink
-			is_full_mode = 1;
-			is_strobe = 1;
-			strob_ctn = 0;
-			ws2812fx.setSegment(ALL_LED, FX_MODE_STATIC, color_1, 0);
-			break;
-
-		case 2: // wipe left + left
-			is_full_mode = 0; // use the letter mapping
-			ws2812fx.setSegment(LETTERS_MAPPING, FX_MODE_COLOR_WIPE_INV, color_1, 3000);
-			ws2812fx.setSegment(BACK_MAPPING, FX_MODE_COLOR_WIPE_INV, color_1, 3000);
-			break;
-		
-		case 3: // wipe left + right
-			is_full_mode = 0; // use the letter mapping
-			ws2812fx.setSegment(LETTERS_MAPPING, FX_MODE_COLOR_WIPE_INV, color_1, 3000);
-			ws2812fx.setSegment(BACK_MAPPING, FX_MODE_COLOR_WIPE_INV, color_1, 3000, true);
-			break;
-		
-		case 4: // wipe right + left
-			is_full_mode = 0; // use the letter mapping
-			ws2812fx.setSegment(LETTERS_MAPPING, FX_MODE_COLOR_WIPE_INV, color_1, 3000, true);
-			ws2812fx.setSegment(BACK_MAPPING, FX_MODE_COLOR_WIPE_INV, color_1, 3000);
-			break;
-
-
-		case 5: // static + rainbow
-			is_full_mode = 1;
-			ws2812fx.setSegment(F_L, FX_MODE_COLOR_WIPE_INV, color_1, 3000);
-			ws2812fx.setSegment(O_L, FX_MODE_COLOR_WIPE_INV, color_1, 3000);
-			ws2812fx.setSegment(L1_L, FX_MODE_COLOR_WIPE_INV, color_1, 3000);
-			ws2812fx.setSegment(L2_L, FX_MODE_COLOR_WIPE_INV, color_1, 3000);
-			ws2812fx.setSegment(E_L, FX_MODE_COLOR_WIPE_INV, color_1, 3000);
-
-			ws2812fx.setSegment(F_B, FX_MODE_RAINBOW_CYCLE, color_1, 3000);
-			ws2812fx.setSegment(O_B, FX_MODE_RAINBOW_CYCLE, color_1, 3000);
-			ws2812fx.setSegment(L1_B, FX_MODE_RAINBOW_CYCLE, color_1, 3000);
-			ws2812fx.setSegment(L2_B, FX_MODE_RAINBOW_CYCLE, color_1, 3000);
-			ws2812fx.setSegment(E_B, FX_MODE_RAINBOW_CYCLE, color_1, 3000);
-			break;
-			
-		case 6: // rainbow + static
-			is_full_mode = 1;
-			ws2812fx.setSegment(F_L, FX_MODE_RAINBOW_CYCLE, color_1, 3000);
-			ws2812fx.setSegment(O_L, FX_MODE_RAINBOW_CYCLE, color_1, 3000);
-			ws2812fx.setSegment(L1_L, FX_MODE_RAINBOW_CYCLE, color_1, 3000);
-			ws2812fx.setSegment(L2_L, FX_MODE_RAINBOW_CYCLE, color_1, 3000);
-			ws2812fx.setSegment(E_L, FX_MODE_RAINBOW_CYCLE, color_1, 3000);
-
-			ws2812fx.setSegment(F_B, FX_MODE_COLOR_WIPE_INV, color_1, 3000);
-			ws2812fx.setSegment(O_B, FX_MODE_COLOR_WIPE_INV, color_1, 3000);
-			ws2812fx.setSegment(L1_B, FX_MODE_COLOR_WIPE_INV, color_1, 3000);
-			ws2812fx.setSegment(L2_B, FX_MODE_COLOR_WIPE_INV, color_1, 3000);
-			ws2812fx.setSegment(E_B, FX_MODE_COLOR_WIPE_INV, color_1, 3000);
-			break;
-
-		case 7: // 
-			is_full_mode = 1;
-			ws2812fx.setSegment(F_L, FX_MODE_COLOR_WIPE_INV, color_1, 3000);
-			ws2812fx.setSegment(O_L, FX_MODE_COLOR_WIPE_INV, color_1, 3000);
-			ws2812fx.setSegment(L1_L, FX_MODE_COLOR_WIPE_INV, color_1, 3000);
-			ws2812fx.setSegment(L2_L, FX_MODE_COLOR_WIPE_INV, color_1, 3000);
-			ws2812fx.setSegment(E_L, FX_MODE_COLOR_WIPE_INV, color_1, 3000);
-
-			ws2812fx.setSegment(F_B, FX_MODE_COLOR_WIPE_INV, color_1, 3000);
-			ws2812fx.setSegment(O_B, FX_MODE_COLOR_WIPE_INV, color_1, 3000);
-			ws2812fx.setSegment(L1_B, FX_MODE_COLOR_WIPE_INV, color_1, 3000);
-			ws2812fx.setSegment(L2_B, FX_MODE_COLOR_WIPE_INV, color_1, 3000);
-			ws2812fx.setSegment(E_B, FX_MODE_COLOR_WIPE_INV, color_1, 3000);
-			break;
-
-		case 8: // theater chase
-			is_full_mode = 1;
-			ws2812fx.setSegment(F_L, FX_MODE_THEATER_CHASE, color_1, 3000);
-			ws2812fx.setSegment(O_L, FX_MODE_THEATER_CHASE, color_1, 3000);
-			ws2812fx.setSegment(L1_L, FX_MODE_THEATER_CHASE, color_1, 3000);
-			ws2812fx.setSegment(L2_L, FX_MODE_THEATER_CHASE, color_1, 3000);
-			ws2812fx.setSegment(E_L, FX_MODE_THEATER_CHASE, color_1, 3000);
-
-			ws2812fx.setSegment(F_B, FX_MODE_THEATER_CHASE, color_1, 3000);
-			ws2812fx.setSegment(O_B, FX_MODE_THEATER_CHASE, color_1, 3000);
-			ws2812fx.setSegment(L1_B, FX_MODE_THEATER_CHASE, color_1, 3000);
-			ws2812fx.setSegment(L2_B, FX_MODE_THEATER_CHASE, color_1, 3000);
-			ws2812fx.setSegment(E_B, FX_MODE_THEATER_CHASE, color_1, 3000);
-			break;
-		case 9: // multi strobe
-			ws2812fx.setSegment(ALL_LED, FX_MODE_MULTI_STROBE, color_1, 3000);
-
-			is_full_mode = 1;
-			break;
-
-		case 10: // TWINKLEFOX
-			is_full_mode = 1;
-			ws2812fx.setSegment(ALL_LED, FX_MODE_TWINKLEFOX, color_1, 50);
-			break;
-
-		case 11: // FX_MODE_FIRE_FLICKER
-			is_full_mode = 1;
-			ws2812fx.setSegment(ALL_LED, FX_MODE_FIRE_FLICKER, color_1, 50);
-			break;
-		
-		case 12: // HYPER_SPARKLE
-			is_full_mode = 1;
-			ws2812fx.setSegment(ALL_LED, FX_MODE_HYPER_SPARKLE, color_1, 50);
-			break;
-		
-		case 13: // FX_MODE_RUNNING_LIGHTS
-			is_full_mode = 1;
-			ws2812fx.setSegment(ALL_LED, FX_MODE_RUNNING_LIGHTS, color_1, 50);
-			break;
-		
-		case 14:
-			is_full_mode = 1;
-			ws2812fx.setSegment(O_B, FX_MODE_RAINBOW_CYCLE, color_1, 50);
-			ws2812fx.setSegment(O_L, FX_MODE_RAINBOW_CYCLE, color_1, 50);
-			break;
-
-
-
-		// 	is_full_mode = 1;
-		// ws2812fx.setSegment(ALL_LED, FX_MODE_RUNNING_LIGHTS);
-		// 	ws2812fx.setSegment(ALL_LED, FX_MODE_TWINKLEFOX);
-		// 	break;
-		// case 7:
-
-		// 	is_full_mode = 1;
-		// 	ws2812fx.setSegment(ALL_LED, FX_MODE_FIRE_FLICKER);
-		// 	break;
-		// case 8:
-
-		// 	is_full_mode = 1;
-		// 	ws2812fx.setSegment(ALL_LED, FX_MODE_COMET);
-		// 	break;
-		// case 9:
-
-		// 	is_full_mode = 1;
-		// 	ws2812fx.setSegment(ALL_LED, snakeMode2, color_1, 10);
-		// 	break;
-		// case 10:
-		// 	is_full_mode = 1;
-		// 	ws2812fx.setSegment(ALL_LED, snakeMode, color_1, 10);
-		// 	break;
 	}
 
-	if (is_full_mode)
-		ws2812fx.setCustomShow(myCustomShow);
-	else
-		ws2812fx.setCustomShow(myCustomShowMapping);
-	set_all_speed(speed);
+	uint8_t scale = f.blackout ? 0 : f.bright;
+	if (scale != 255)
+		nscale8(out, f.led_count, scale);
 }
 
+// Remove all segments, select the layout and turn the fixture off
+void reset_fx(Fixture& f, Layout layout) {
+	f.is_strobe = false;
+	f.blackout = false;
+	f.layout = layout;
+	f.fx->resetSegments();
+	f.fx->strip_off();
+}
 
+// Create the WS2812FX segment(s) for a zone range (relative to the fixture),
+// starting at segment index n. Returns the next free segment index.
+uint8_t add_segment(Fixture& f, uint8_t n, Range range, uint8_t mode, uint8_t flags) {
+	uint8_t base = f.def->zones.first;
+	uint16_t first = base + range.first;
+	uint16_t last  = min<uint16_t>(base + range.last, f.def->zones.last);
+	if (first > last)
+		return n;
 
+	if (flags & EACH_ZONE) {
+		for (uint16_t z = first; z <= last; z++)
+			n = add_segment(f, n, only(z - base), mode, flags & ~EACH_ZONE);
+		return n;
+	}
+
+	if (n >= max_num_seg) {
+		Serial.printf("Too many segments, max %d\n", max_num_seg);
+		return n;
+	}
+
+	uint16_t start = (f.layout == LAYOUT_LEDS) ? zone_start[first] - f.led_start : first - base;
+	uint16_t stop  = (f.layout == LAYOUT_LEDS) ? zone_stop[last]   - f.led_start : last  - base;
+	f.fx->setSegment(n, start, stop, mode, f.color, 0, (bool)(flags & REVERSE));
+	return n + 1;
+}
+
+void set_all_speed(Fixture& f) {
+	for (uint8_t i = 0; i < f.fx->getNumSegments(); i++) {
+		if (f.fx->getMode(i) == FX_MODE_STATIC) {
+			f.fx->setSpeed(i, 1);
+		} else {
+			f.fx->setSpeed(i, f.speed);
+		}
+	}
+}
+
+void start_anim(Fixture& f) {
+	if (f.anim < 0 || f.anim >= (int)ANIMS.size()) { // no animation: fixture stays off
+		reset_fx(f, LAYOUT_LEDS);
+		return;
+	}
+
+	const Anim& a = ANIMS[f.anim];
+	reset_fx(f, a.layout);
+
+	uint8_t n = 0;
+	for (const Seg& s : a.segs)
+		n = add_segment(f, n, s.range, s.mode, s.flags);
+
+	if (a.strobe) {
+		f.is_strobe = true;
+		f.last_strobe_toggle = millis();
+	}
+	set_all_speed(f);
+}
+
+// Letter mode, see FixtureDef::letters. Returns false when no letter channel is used.
+bool update_letters(Fixture& f, uint16_t dmx_base) {
+	bool active = false;
+	uint32_t zones_on = 0;
+	for (const Letter& l : f.def->letters) {
+		uint8_t value = DMXLibrary::Read(dmx_base + l.dmx_channel);
+		if (value > 10)
+			active = true;
+		if (value > 127)
+			zones_on |= l.zones;
+	}
+	if (!active)
+		return false;
+
+	if (!f.letter_mode)
+		reset_fx(f, LAYOUT_LEDS);
+
+	if (!f.letter_mode || zones_on != f.letters_zones_on) {
+		f.letters_zones_on = zones_on;
+		uint8_t base = f.def->zones.first;
+		for (uint8_t z = base; z <= f.def->zones.last; z++) {
+			uint8_t mode = (zones_on & ZONE_BIT(z)) ? FX_MODE_STATIC : MODE_OFF;
+			add_segment(f, z - base, only(z - base), mode, 0);
+		}
+	}
+	return true;
+}
+
+// Append printf-style text to a buffer, never overflowing it
+static void appendf(char* buf, size_t size, const char* fmt, ...) {
+	size_t len = strlen(buf);
+	if (len + 1 >= size)
+		return;
+	va_list args;
+	va_start(args, fmt);
+	vsnprintf(buf + len, size - len, fmt, args);
+	va_end(args);
+}
+
+// Print a fixture's state when it changes, at most every 100 ms, e.g.
+// [DMX 001 FOLLE] anim 05 wipe bulb + rainbow back | color #FF8000 | dim  80% | speed 128/255
+// [DMX 001 FOLLE] letters F O -- -- E              | color #FF8000 | dim 100%
+void log_state(Fixture& f, uint16_t dmx_base, uint8_t speed_channel) {
+	char line[160] = "";
+
+	appendf(line, sizeof(line), "[DMX %03d %s] ", dmx_base + 1, f.def->name);
+	if (f.letter_mode) {
+		char letters[48] = "letters";
+		for (const Letter& l : f.def->letters)
+			appendf(letters, sizeof(letters), " %s", (f.letters_zones_on & l.zones) ? l.name : "--");
+		appendf(line, sizeof(line), "%-34s", letters);
+	} else {
+		appendf(line, sizeof(line), "anim %02d %-26s", f.anim, f.anim < (int)ANIMS.size() ? ANIMS[f.anim].name : "(none: off)");
+	}
+	appendf(line, sizeof(line), " | color #%06X | dim %3d%%", f.color, f.bright * 100 / 255);
+	if (f.is_strobe)
+		appendf(line, sizeof(line), " | strobe %3d/255 (%ld ms on/off)", speed_channel, f.strobe_speed / 10);
+	else if (!f.letter_mode)
+		appendf(line, sizeof(line), " | speed %3d/255 (fx %d)", speed_channel, (int)f.speed);
+
+	unsigned long now = millis();
+	if (strcmp(line, f.last_log) != 0 && now - f.last_log_time > 100) {
+		Serial.println(line);
+		strcpy(f.last_log, line);
+		f.last_log_time = now;
+	}
+}
+
+// DMX speed channel to WS2812FX speed: 0 = slowest (65535), 255 = fastest (10).
+// Exponential, because modes divide the speed by up to the segment length:
+// a linear curve leaves most of the fader below one frame for those modes.
+uint16_t dmx_to_speed(uint8_t value) {
+	return 10 * pow(6553.5, (255 - value) / 255.0);
+}
+
+void apply_dmx(Fixture& f, uint16_t dmx_base) {
+	if (update_letters(f, dmx_base)) {
+		f.letter_mode = true;
+	} else {
+		int new_anim = DMXLibrary::Read(dmx_base + DMX_CHANNEL_ANIM) / 17; // 0-15
+		if (new_anim != f.anim || f.letter_mode) {
+			f.anim = new_anim;
+			start_anim(f);
+		}
+		f.letter_mode = false;
+	}
+
+	uint8_t r = DMXLibrary::Read(dmx_base + DMX_CHANNEL_COLOR_1_R);
+	uint8_t g = DMXLibrary::Read(dmx_base + DMX_CHANNEL_COLOR_1_G);
+	uint8_t b = DMXLibrary::Read(dmx_base + DMX_CHANNEL_COLOR_1_B);
+	f.color = ((uint32_t)r << 16) | ((uint32_t)g << 8) | b;
+	f.fx->setAllColor(f.color);
+
+	uint8_t bright = DMXLibrary::Read(dmx_base + DMX_CHANNEL_BRIGHT);
+	if (bright != f.bright) {
+		f.bright = bright;
+		leds_dirty = true;
+	}
+
+	uint8_t speed_channel = DMXLibrary::Read(dmx_base + DMX_CHANNEL_SPEED);
+	if (f.is_strobe) {
+		f.strobe_speed = 2550 - speed_channel * 10;
+	} else {
+		int new_speed = dmx_to_speed(speed_channel);
+		if (f.speed != new_speed) {
+			f.speed = new_speed;
+			set_all_speed(f);
+		}
+	}
+
+	log_state(f, dmx_base, speed_channel);
+}
+
+uint16_t read_dip_address() {
+	uint16_t address = 0;
+	for (uint8_t i = 0; i < sizeof(DIP_ADDRESS_PINS); i++) {
+		if (!digitalRead(DIP_ADDRESS_PINS[i]))
+			address |= 1 << i;
+	}
+	return address;
+}
+
+// Same animation on every fixture, used at boot and in test mode
+void play_on_all(uint8_t mode, uint16_t speed, uint8_t bright) {
+	for (Fixture& f : fixtures) {
+		reset_fx(f, LAYOUT_LEDS);
+		f.bright = bright;
+		add_segment(f, 0, ALL, mode, 0);
+		f.fx->setSpeed(0, speed);
+		f.anim = 255; // restart the DMX animation when DMX comes back
+	}
+}
 
 void DMX_task(void* parameter) {
 	Serial.printf("Task DMX start\n");
-	pinMode(DIP_PIN_0, INPUT_PULLUP);
-	pinMode(DIP_PIN_1, INPUT_PULLUP);
-	pinMode(DIP_PIN_2, INPUT_PULLUP);
-	pinMode(DIP_PIN_3, INPUT_PULLUP);
-	pinMode(DIP_PIN_4, INPUT_PULLUP);
-	pinMode(DIP_PIN_5, INPUT_PULLUP);
-	pinMode(DIP_PIN_6, INPUT_PULLUP);
-	pinMode(DIP_PIN_7, INPUT_PULLUP);
-	pinMode(DIP_PIN_8, INPUT_PULLUP);
-	pinMode(DIP_PIN_9, INPUT_PULLUP);
+	for (uint8_t pin : DIP_ADDRESS_PINS)
+		pinMode(pin, INPUT_PULLUP);
+	pinMode(DIP_PIN_9, INPUT_PULLUP); // unused
 
-	pinMode(15, OUTPUT);
-	digitalWrite(15, 0);
+	pinMode(DMX_SERIAL_IO_PIN, OUTPUT);
+	digitalWrite(DMX_SERIAL_IO_PIN, 0);
 
 	delay(10);
 
@@ -469,279 +350,98 @@ void DMX_task(void* parameter) {
 		uart_set_line_inverse(2, UART_SIGNAL_RXD_INV);
 	#endif
 	Serial.println("DMX initialized...");
+	Serial.printf("Adress DMX: %d, %d fixture(s), %d channels\n", read_dip_address(), (int)fixtures.size(), max_dmx_channel);
 
-	uint16_t dip = (digitalRead(DIP_PIN_0) ? 0 : 1)
-		| (digitalRead(DIP_PIN_1) ? 0 : 1 << 1)
-		| (digitalRead(DIP_PIN_2) ? 0 : 1 << 2)
-		| (digitalRead(DIP_PIN_3) ? 0 : 1 << 3)
-		| (digitalRead(DIP_PIN_4) ? 0 : 1 << 4)
-		| (digitalRead(DIP_PIN_5) ? 0 : 1 << 5)
-		| (digitalRead(DIP_PIN_6) ? 0 : 1 << 6)
-		| (digitalRead(DIP_PIN_7) ? 0 : 1 << 7)
-		| (digitalRead(DIP_PIN_8) ? 0 : 1 << 8);
-	Serial.printf("Adress DMX: %d\n", dip);
+	// boot animation, until DMX is received
+	xSemaphoreTake(fx_mutex, portMAX_DELAY);
+	play_on_all(FX_MODE_COLOR_WIPE, 3000, 255);
+	xSemaphoreGive(fx_mutex);
 
-	ws2812fx.setSegment(ALL_LED, FX_MODE_COLOR_WIPE, color_1, 3000);
 	uint8_t ctn = 0;
 	uint8_t test_mode = 0;
-	
+	enum { STATUS_NONE, STATUS_OK, STATUS_NO_SIGNAL, STATUS_BAD_ADDRESS } last_status = STATUS_NONE;
 
-	for (;;) { // infinite loop
-		uint16_t dip = (digitalRead(DIP_PIN_0) ? 0 : 1)
-			| (digitalRead(DIP_PIN_1) ? 0 : 1 << 1)
-			| (digitalRead(DIP_PIN_2) ? 0 : 1 << 2)
-			| (digitalRead(DIP_PIN_3) ? 0 : 1 << 3)
-			| (digitalRead(DIP_PIN_4) ? 0 : 1 << 4)
-			| (digitalRead(DIP_PIN_5) ? 0 : 1 << 5)
-			| (digitalRead(DIP_PIN_6) ? 0 : 1 << 6)
-			| (digitalRead(DIP_PIN_7) ? 0 : 1 << 7)
-			| (digitalRead(DIP_PIN_8) ? 0 : 1 << 8);
-		// Serial.printf("%d\n", dip);
-		uint16_t dmx_adress = dip - 1;
-		uint8_t  lite_mode = (digitalRead(DIP_PIN_9) ? 0 : 1);
+	for (;;) {
+		uint16_t dip = read_dip_address();
 
-		if (dip != 0) {
-			test_mode = 0;
-			if (DMXLibrary::IsHealthy() && dmx_adress <= 495) {
-				digitalWrite(LED_STATUS_PIN, HIGH);
-				if (dip != 0) {
-					uint8_t print_info = 0;
-					unsigned long now = millis();
-					if (now - lastUpdate > 50) {
-						print_info = 1;
-						lastUpdate = now;
-					}
-					ctn = 0;
-					int new_anim = anim;
-
-					new_anim = DMXLibrary::Read(dmx_adress + DMX_CHANNEL_LITE_ANIM) / 17; // 0-13
-
-					if (DMXLibrary::Read(dmx_adress + DMX_CHANNEL_F) > 10
-					|| DMXLibrary::Read(dmx_adress + DMX_CHANNEL_O) > 10
-					|| DMXLibrary::Read(dmx_adress + DMX_CHANNEL_L1) > 10
-					|| DMXLibrary::Read(dmx_adress + DMX_CHANNEL_L2) > 10
-					|| DMXLibrary::Read(dmx_adress + DMX_CHANNEL_E) > 10)
-					{
-						if (letter_mode == 0) { // set letter mode
-							is_strobe = 0;
-							blackout = 0;
-							ws2812fx.resetSegments();
-							ws2812fx.strip_off();
-
-							// ws2812fx.setSegment(O_L, FX_MODE_STATIC, color_1, 0);
-							// ws2812fx.setSegment(L1_L, FX_MODE_STATIC, color_1, 0);
-							// ws2812fx.setSegment(L2_L, FX_MODE_STATIC, color_1, 0);
-							// ws2812fx.setSegment(E_L, FX_MODE_STATIC, color_1, 0);
-						}
-						if (DMXLibrary::Read(dmx_adress + DMX_CHANNEL_F) > 127) {
-							ws2812fx.setSegment(F_L, FX_MODE_STATIC, color_1, 0);
-							ws2812fx.setSegment(F_B, FX_MODE_STATIC, color_1, 0);
-						} else {
-							ws2812fx.setSegment(F_L, animOff, color_1, 0);
-							ws2812fx.setSegment(F_B, animOff, color_1, 0);
-						}
-
-						if (DMXLibrary::Read(dmx_adress + DMX_CHANNEL_O) > 127) {
-							ws2812fx.setSegment(O_L, FX_MODE_STATIC, color_1, 0);
-							ws2812fx.setSegment(O_B, FX_MODE_STATIC, color_1, 0);
-						} else {
-							ws2812fx.setSegment(O_L, animOff, color_1, 0);
-							ws2812fx.setSegment(O_B, animOff, color_1, 0);
-						}
-
-						if (DMXLibrary::Read(dmx_adress + DMX_CHANNEL_L1) > 127) {
-							ws2812fx.setSegment(L1_L, FX_MODE_STATIC, color_1, 0);
-							ws2812fx.setSegment(L1_B, FX_MODE_STATIC, color_1, 0);
-						} else {
-							ws2812fx.setSegment(L1_L, animOff, color_1, 0);
-							ws2812fx.setSegment(L1_B, animOff, color_1, 0);
-						}
-
-						if (DMXLibrary::Read(dmx_adress + DMX_CHANNEL_L2) > 127) {
-							ws2812fx.setSegment(L2_L, FX_MODE_STATIC, color_1, 0);
-							ws2812fx.setSegment(L2_B, FX_MODE_STATIC, color_1, 0);
-						} else {
-							ws2812fx.setSegment(L2_L, animOff, color_1, 0);
-							ws2812fx.setSegment(L2_B, animOff, color_1, 0);
-						}
-
-						if (DMXLibrary::Read(dmx_adress + DMX_CHANNEL_E) > 127) {
-							ws2812fx.setSegment(E_L, FX_MODE_STATIC, color_1, 0);
-							ws2812fx.setSegment(E_B, FX_MODE_STATIC, color_1, 0);
-						} else {
-							ws2812fx.setSegment(E_L, animOff, color_1, 0);
-							ws2812fx.setSegment(E_B, animOff, color_1, 0);
-						}
-							
-						// if (DMXLibrary::Read(dmx_adress + DMX_CHANNEL_O) > 127) {
-						// 	ws2812fx.setSegment(O_L, FX_MODE_STATIC, color_1, 0);
-						// 	ws2812fx.setSegment(O_B, FX_MODE_STATIC, color_1, 0);
-						// }
-						letter_mode = 1;
-
-
-
-					} else {
-						if (new_anim != anim || letter_mode) {
-							Serial.printf("New anim %d\n", new_anim);
-							anim = new_anim;
-							start_anim(anim);
-							color_1 = 0;
-						}
-						letter_mode = 0;
-					}
-
-
-
-					// if (DMXLibrary::Read(dmx_adress + DMX_CHANNEL_STROBE_G) > 127 || anim == 1) { // strobo general + strob white
-					// 	is_strobe = 1;
-					// }
-					// else {
-					// 	blackout = 0;
-					// 	is_strobe = 0;
-					// }
-
-					if (print_info)
-						Serial.printf("RGB: %03d, %03d, %03d", DMXLibrary::Read(dmx_adress + DMX_CHANNEL_COLOR_1_R), DMXLibrary::Read(dmx_adress + DMX_CHANNEL_COLOR_1_G), DMXLibrary::Read(dmx_adress + DMX_CHANNEL_COLOR_1_B));
-					// if (anim != 1) { // not strobe white
-						uint32_t new_color = ((uint32_t)DMXLibrary::Read(dmx_adress + DMX_CHANNEL_COLOR_1_R) << 16) | ((uint32_t)DMXLibrary::Read(dmx_adress + DMX_CHANNEL_COLOR_1_G) << 8) | ((uint32_t)DMXLibrary::Read(dmx_adress + DMX_CHANNEL_COLOR_1_B));
-						if (new_color != color_1) {
-							color_1 = new_color;
-							// if (new_anim == 0) // strobe color hack
-							// 	ws2812fx.setSegment(SEG_1, FX_MODE_BLINK, color_1, 200);
-						}
-						ws2812fx.setAllColor(color_1);
-					// }
-
-					if (print_info)
-						Serial.printf(", dim: %03d", DMXLibrary::Read(dmx_adress + DMX_CHANNEL_BRIGHT));
-					if (bright != DMXLibrary::Read(dmx_adress + DMX_CHANNEL_BRIGHT)) {
-						bright = DMXLibrary::Read(dmx_adress + DMX_CHANNEL_BRIGHT);
-					}
-
-					if (anim == 1) { // static or strob
-						int new_strobe_speed = 2550 - DMXLibrary::Read(dmx_adress + DMX_CHANNEL_SPEED) * 10;
-						// int new_strobe_speed = 1000;
-						// if (strobe_speed != new_strobe_speed) {
-							strobe_speed = new_strobe_speed;
-						// 	strob_ctn = 0;
-						// }
-					} else {
-						int new_speed = 2650 - DMXLibrary::Read(dmx_adress + DMX_CHANNEL_SPEED) * 10;
-						if (speed != new_speed) {
-							speed = new_speed;
-							set_all_speed(speed);
-						}
-					}
-
-					// int new_speed = 255 - DMXLibrary::Read(dmx_adress + DMX_CHANNEL_STROBE_SPEED);
-					// new_speed = map(new_speed, 0, 255, 200, 1000);
-					// if (strobe_speed != new_speed) {
-					// 	strobe_speed = new_speed;
-					// 	strob_ctn = 0;
-					// }
-
-					if (print_info) {
-						// Serial.printf(", speed: %04d", speed);
-						Serial.printf(", anim: %02d", anim);
-						Serial.printf(", adress: %03d", dmx_adress+1);
-						Serial.printf(", strobe_speed: %d", strobe_speed);
-						Serial.printf(", speed: %d", speed);
-						Serial.printf(", is_strobe: %d", is_strobe);
-						Serial.printf("\n");
-					}
-				}
-			}
-			else {
-				if (ctn++ > 10)
-					digitalWrite(LED_STATUS_PIN, LOW);
-			}
-		}
-		else { // test mode
+		xSemaphoreTake(fx_mutex, portMAX_DELAY);
+		if (dip == 0) { // test mode
 			if (test_mode == 0) {
-				Serial.printf("test Mode\n");
-				ws2812fx.resetSegments();
-				ws2812fx.strip_off();
-				bright = 50;
-				blackout = 0;
-				// chase_rainbow();
-				ws2812fx.setSegment(ALL_LED, FX_MODE_RAINBOW_CYCLE, color_1, 10);
+				Serial.printf("[TEST] DIP address is 0: rainbow test pattern\n");
+				last_status = STATUS_NONE;
+				play_on_all(FX_MODE_RAINBOW_CYCLE, 10, 50);
+				test_mode = 1;
 			}
-			test_mode = 1;
+		} else {
+			test_mode = 0;
+			uint16_t dmx_adress = dip - 1;
+			auto status = STATUS_OK;
+			if (dmx_adress + max_dmx_channel > TOTAL_CHANNELS)
+				status = STATUS_BAD_ADDRESS;
+			else if (!DMXLibrary::IsHealthy())
+				status = STATUS_NO_SIGNAL;
+
+			if (status != last_status) {
+				if (status == STATUS_OK)
+					Serial.printf("[DMX %03d] signal OK\n", dip);
+				else if (status == STATUS_NO_SIGNAL)
+					Serial.printf("[DMX %03d] no DMX signal\n", dip);
+				else
+					Serial.printf("[DMX %03d] address too high, max is %d\n", dip, TOTAL_CHANNELS - max_dmx_channel + 1);
+				last_status = status;
+			}
+
+			if (status == STATUS_OK) {
+				digitalWrite(LED_STATUS_PIN, HIGH);
+				ctn = 0;
+				for (Fixture& f : fixtures)
+					apply_dmx(f, dmx_adress + f.def->dmx_offset);
+			} else if (ctn++ > 10) {
+				digitalWrite(LED_STATUS_PIN, LOW);
+			}
 		}
+		xSemaphoreGive(fx_mutex);
 
 		vTaskDelay(25 / portTICK_PERIOD_MS);
 	}
 }
 
-void myCustomShow(void) {
-	uint8_t* pixels_v1 = ws2812fx.getPixels();
-	memcpy(leds, ws2812fx.getPixels(), sizeof(leds));
-
-	if (blackout)
-		FastLED.setBrightness(0);
-	else
-		FastLED.setBrightness(bright);
-
-	FastLED.show();
-}
-
-void myCustomShowMapping(void) {
-	uint8_t* pixels_v1 = ws2812fx.getPixels();
-	uint32_t nb_seg = (sizeof(mapping)/sizeof(segment_structure));
-
-	for (int i = 0; i < nb_seg; i++) {
-		for (int x = mapping[i].start; x <= mapping[i].stop; x++) {
-			leds[off_table[mapping[i].output] + x] = CRGB(
-				pixels_v1[mapping[i].pixel*3+0],
-				pixels_v1[mapping[i].pixel*3+1],
-				pixels_v1[mapping[i].pixel*3+2]
-			);
-		}
-	}
-	if (blackout)
-		FastLED.setBrightness(0);
-	else
-		FastLED.setBrightness(bright);
-	FastLED.show();
-}
-
-
-void mapMode() {
-	FastLED.clear();
-	ws2812fx.setCustomShow(myCustomShowMapping); ws2812fx.resetSegments(); ws2812fx.strip_off();
-}
-
-void fullMode() {
-	FastLED.clear();
-	ws2812fx.setCustomShow(myCustomShow); ws2812fx.resetSegments(); ws2812fx.strip_off();
-}
-
 void led_task(void* parameter) {
 	Serial.printf("Task LED start\n");
 
-	LEDS.addLeds<LEDS_TYPE, LED_PORT_0, COLOR_ORDER>((CRGB*)leds, LED_PORT_0_OFF, LED_PORT_0_NB_PIXEL);
-	LEDS.addLeds<LEDS_TYPE, LED_PORT_1, RGB>((CRGB*)leds, LED_PORT_1_OFF, LED_PORT_1_NB_PIXEL);
-	
-	ws2812fx.init();
-	ws2812fx.setBrightness(255);
-	ws2812fx.start();
-	ws2812fx.setCustomShow(myCustomShowMapping); // set the custom show function to forgo the NeoPixel
+	add_outputs(leds, output_offset);
+
+	xSemaphoreTake(fx_mutex, portMAX_DELAY);
+	for (Fixture& f : fixtures) {
+		register_custom_modes(*f.fx);
+		f.fx->init();
+		f.fx->setBrightness(255);
+		f.fx->start();
+	}
+	xSemaphoreGive(fx_mutex);
 
 	pinMode(LED_STATUS_PIN, OUTPUT);
-	digitalWrite(LED_STATUS_PIN, led_blink);
-	
-	
+	digitalWrite(LED_STATUS_PIN, LOW);
+
 	for (;;) {
-		ws2812fx.service();
-		if (is_strobe) {
-			strob_ctn++;
-			// Serial.printf("stob %d > %d %d\n", strob_ctn, ((strobe_speed) / 100), blackout);
-			if (strob_ctn > ((strobe_speed) / 100)) {
-				blackout = !blackout;
-				strob_ctn = 0;
+		xSemaphoreTake(fx_mutex, portMAX_DELAY);
+		unsigned long now = millis();
+		for (Fixture& f : fixtures) {
+			current_fx = f.fx;
+			f.fx->service();
+			if (f.is_strobe && now - f.last_strobe_toggle > (unsigned long)(f.strobe_speed / 10)) { // 0-255 ms half period
+				f.blackout = !f.blackout;
+				f.last_strobe_toggle = now;
+				leds_dirty = true;
 			}
 		}
+		if (leds_dirty) {
+			for (Fixture& f : fixtures)
+				render(f);
+			FastLED.show();
+			leds_dirty = false;
+		}
+		xSemaphoreGive(fx_mutex);
 		vTaskDelay(1 / portTICK_PERIOD_MS);
 	}
 }
@@ -749,6 +449,9 @@ void led_task(void* parameter) {
 void setup() {
 	Serial.begin(115200);
 	Serial.printf("Start\n");
+
+	init_layout();
+	fx_mutex = xSemaphoreCreateMutex();
 
 	xTaskCreatePinnedToCore(
 		led_task,    // Function that should be called
@@ -772,5 +475,5 @@ void setup() {
 }
 
 void loop() {
-	vTaskDelay(1 / portTICK_PERIOD_MS);
-}	
+	vTaskDelete(NULL); // everything runs in led_task and DMX_task
+}
