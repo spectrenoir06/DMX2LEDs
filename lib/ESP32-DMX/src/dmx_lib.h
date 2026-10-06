@@ -43,6 +43,8 @@ class DMXLibrary
         static void WriteAll(uint8_t * data, uint16_t start, size_t size);  // copies the defined channels into the write buffer
 
         static uint8_t IsHealthy();                            // returns true, when a valid DMX signal was received within the last 500ms
+
+        static uint32_t DroppedFrames();                    // incomplete frames received and ignored since boot
         
     private:
         DMXLibrary();                                              // hide constructor

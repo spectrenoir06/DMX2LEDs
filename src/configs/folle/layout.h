@@ -5,6 +5,8 @@
 #include <FastLED.h>
 #include "fx_types.h"
 
+#define DEVICE_NAME "FOLLE" // WiFi network name in update mode: FOLLE-<address>
+
 // ---- Outputs -----------------------------------------------------------
 // Number of LEDs on each data pin. All outputs share one pixel buffer,
 // stored back to back in this order.

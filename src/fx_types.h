@@ -4,6 +4,18 @@
 #include <Arduino.h>
 #include <vector>
 
+// ---- DMX block ---------------------------------------------------------
+#define TOTAL_CHANNELS 512
+
+// Channels of each fixture, relative to its block (1 = first channel).
+// Letter channels are defined per fixture in layout.h.
+#define DMX_CHANNEL_COLOR_1_R    ( 1)
+#define DMX_CHANNEL_COLOR_1_G    ( 2)
+#define DMX_CHANNEL_COLOR_1_B    ( 3)
+#define DMX_CHANNEL_BRIGHT       ( 4)
+#define DMX_CHANNEL_SPEED        ( 5)
+#define DMX_CHANNEL_ANIM         ( 6)
+
 // ---- Layout ------------------------------------------------------------
 
 // Named group of consecutive LEDs on one output

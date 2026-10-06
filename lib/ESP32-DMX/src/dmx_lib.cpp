@@ -46,6 +46,17 @@ long DMXLibrary::last_dmx_packet = 0;
 
 uint8_t DMXLibrary::dmx_data[513];
 
+// Frames are received into rx_buf and only copied to dmx_data once complete,
+// so a glitch on the line (seen as a break in the middle of a frame) can't
+// shift the rest of a frame onto the first channels.
+static uint8_t rx_buf[513];
+static uint16_t rx_len = 0;
+static unsigned long last_full_frame = 0;  // ticks (ms), last frame with all 512 channels
+static uint16_t last_short_len = 0;        // length of the previous short frame
+static uint32_t dropped_frames = 0;
+static portMUX_TYPE dmx_mux = portMUX_INITIALIZER_UNLOCKED;
+
+
 DMXLibrary::DMXLibrary()
 {
 
@@ -109,7 +120,9 @@ uint8_t DMXLibrary::Read(uint16_t channel)
 #ifndef DMX_IGNORE_THREADSAFETY
     xSemaphoreTake(sync_dmx, portMAX_DELAY);
 #endif
+    portENTER_CRITICAL(&dmx_mux);
     uint8_t tmp_dmx = dmx_data[channel];
+    portEXIT_CRITICAL(&dmx_mux);
 #ifndef DMX_IGNORE_THREADSAFETY
     xSemaphoreGive(sync_dmx);
 #endif
@@ -171,7 +184,9 @@ uint8_t DMXLibrary::IsHealthy()
 #ifndef DMX_IGNORE_THREADSAFETY
     xSemaphoreTake(sync_dmx, portMAX_DELAY);
 #endif
+    portENTER_CRITICAL(&dmx_mux);
     long dmx_timeout = last_dmx_packet;
+    portEXIT_CRITICAL(&dmx_mux);
 #ifndef DMX_IGNORE_THREADSAFETY
     xSemaphoreGive(sync_dmx);
 #endif
@@ -211,6 +226,43 @@ void DMXLibrary::uart_send_task(void*pvParameters)
     }
 }
 
+uint32_t DMXLibrary::DroppedFrames()
+{
+    return dropped_frames;
+}
+
+// Called when a frame ends (next break, or 512 channels received)
+static void end_frame(uint8_t* dmx_data, long* last_dmx_packet)
+{
+    bool valid;
+    if(rx_len == 513)
+    {
+        valid = true;
+        last_full_frame = xTaskGetTickCount();
+    }
+    else
+    {
+        // Short frames are legal (sources sending fewer channels), but a
+        // false break also gives one. Accept them only from a source that
+        // doesn't send full frames, and twice the same length in a row.
+        valid = rx_len > 1 && rx_len == last_short_len && xTaskGetTickCount() - last_full_frame > 1000;
+        last_short_len = rx_len;
+    }
+
+    if(valid)
+    {
+        portENTER_CRITICAL(&dmx_mux);
+        memcpy(dmx_data, rx_buf, rx_len);
+        *last_dmx_packet = xTaskGetTickCount();
+        portEXIT_CRITICAL(&dmx_mux);
+    }
+    else if(rx_len > 0)
+    {
+        dropped_frames++;
+    }
+    rx_len = 0;
+}
+
 void DMXLibrary::uart_event_task(void *pvParameters)
 {
     uart_event_t event;
@@ -220,53 +272,34 @@ void DMXLibrary::uart_event_task(void *pvParameters)
         // wait for data in the dmx_queue
         if(xQueueReceive(dmx_rx_queue, (void * )&event, (portTickType)portMAX_DELAY))
         {
-            bzero(dtmp, BUF_SIZE);
             switch(event.type)
             {
                 case UART_DATA:
-                    // read the received data
-                    uart_read_bytes(DMX_UART_NUM, dtmp, event.size, portMAX_DELAY);
-                    // check if break detected
-                    if(dmx_state == DMX_BREAK)
+                {
+                    int len = uart_read_bytes(DMX_UART_NUM, dtmp, event.size, portMAX_DELAY);
+                    int i = 0;
+                    // first byte after a break: start code, 0 for DMX (else RDM or custom protocol)
+                    if(dmx_state == DMX_BREAK && len > 0)
                     {
-                        // if not 0, then RDM or custom protocol
-                        if(dtmp[0] == 0)
-                        {
-                        dmx_state = DMX_DATA;
-                        // reset dmx adress to 0
-                        current_rx_addr = 0;
-#ifndef DMX_IGNORE_THREADSAFETY
-                        xSemaphoreTake(sync_dmx, portMAX_DELAY);
-#endif
-                        // store received timestamp
-                        last_dmx_packet = xTaskGetTickCount();
-#ifndef DMX_IGNORE_THREADSAFETY
-                        xSemaphoreGive(sync_dmx);
-#endif
-                        }
+                        dmx_state = (dtmp[0] == 0) ? DMX_DATA : DMX_IDLE;
+                        rx_len = 0;
                     }
-                    // check if in data receive mode
                     if(dmx_state == DMX_DATA)
                     {
-#ifndef DMX_IGNORE_THREADSAFETY
-                        xSemaphoreTake(sync_dmx, portMAX_DELAY);
-#endif
-                        // copy received bytes to dmx data array
-                        for(int i = 0; i < event.size; i++)
+                        for(; i < len && rx_len < 513; i++)
+                            rx_buf[rx_len++] = dtmp[i];
+                        if(rx_len == 513)
                         {
-                            if(current_rx_addr < 513)
-                            {
-                                dmx_data[current_rx_addr++] = dtmp[i];
-                            }
+                            end_frame(dmx_data, &last_dmx_packet);
+                            dmx_state = DMX_IDLE; // wait for the next break
                         }
-#ifndef DMX_IGNORE_THREADSAFETY
-                        xSemaphoreGive(sync_dmx);
-#endif
                     }
                     break;
+                }
                 case UART_BREAK:
-                    // break detected
-                    // clear queue und flush received bytes                    
+                    // break detected: the previous frame is over
+                    if(dmx_state == DMX_DATA)
+                        end_frame(dmx_data, &last_dmx_packet);
                     uart_flush_input(DMX_UART_NUM);
                     xQueueReset(dmx_rx_queue);
                     dmx_state = DMX_BREAK;
@@ -276,7 +309,10 @@ void DMXLibrary::uart_event_task(void *pvParameters)
                 case UART_BUFFER_FULL:
                 case UART_FIFO_OVF:
                 default:
-                    // error recevied, going to idle mode
+                    // error received: drop the frame, wait for the next break
+                    if(dmx_state == DMX_DATA && rx_len > 0)
+                        dropped_frames++;
+                    rx_len = 0;
                     uart_flush_input(DMX_UART_NUM);
                     xQueueReset(dmx_rx_queue);
                     dmx_state = DMX_IDLE;

@@ -27,6 +27,6 @@ jobs:
     - name: Build
       run: >
         pio run
-        -e folle -e folle_test
-        -e generic_480 -e generic_960 -e generic_2048
-        -e generic_8x_480 -e generic_8x_960 -e generic_8x_2048
+        -e folle
+        -e generic_1x_30 -e generic_1x_480 -e generic_1x_960 -e generic_1x_2048
+        -e generic_8x_30 -e generic_8x_480 -e generic_8x_960 -e generic_8x_2048

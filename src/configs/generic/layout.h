@@ -14,6 +14,8 @@
 
 #define DMX_BLOCK_SIZE 6 // R G B, dim, speed, anim
 
+#define DEVICE_NAME "DMX2LEDs" // WiFi network name in update mode: DMX2LEDs-<address>
+
 #ifndef MULTI_OUTPUT
 
 constexpr uint16_t OUTPUT_SIZES[] = { LED_COUNT };

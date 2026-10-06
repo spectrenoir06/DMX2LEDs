@@ -8,20 +8,18 @@
 // From the config folder selected in platformio.ini (src/configs/<name>/)
 #include "layout.h"
 #include "anims.h"
-
-#define TOTAL_CHANNELS 512
-
-// DMX channels, relative to each fixture's block (letter channels are in layout.h)
-#define DMX_CHANNEL_COLOR_1_R    ( 1)
-#define DMX_CHANNEL_COLOR_1_G    ( 2)
-#define DMX_CHANNEL_COLOR_1_B    ( 3)
-#define DMX_CHANNEL_BRIGHT       ( 4)
-#define DMX_CHANNEL_SPEED        ( 5)
-#define DMX_CHANNEL_ANIM         ( 6)
+#include "ota.h"
 
 constexpr size_t NB_OUTPUTS = sizeof(OUTPUT_SIZES) / sizeof(OUTPUT_SIZES[0]);
 constexpr uint16_t sum(const uint16_t* a, size_t n) { return n == 0 ? 0 : a[n - 1] + sum(a, n - 1); }
 constexpr uint16_t LED_NB_PIXEL = sum(OUTPUT_SIZES, NB_OUTPUTS);
+
+// Minimum time between two frames sent to the LEDs (100 fps max)
+#define MIN_FRAME_MS 10
+
+// WiFi update mode: fixture 1 at color R=42 G=43 B=44 with dim at 0, for
+// OTA_HOLD_MS. Changing any of these values leaves update mode.
+#define OTA_HOLD_MS 5000
 
 const uint32_t max_num_seg = 20;
 const uint32_t max_num_active_seg = 20;
@@ -67,6 +65,7 @@ struct Fixture {
 std::vector<Fixture> fixtures;
 WS2812FX* current_fx = nullptr; // see custom_modes.h
 bool leds_dirty = false;        // a fixture changed, leds[] must be rebuilt and sent
+volatile bool leds_paused = false; // no frames sent while a firmware update writes the flash
 
 // fixtures and the state above are shared between led_task and DMX_task
 SemaphoreHandle_t fx_mutex;
@@ -92,7 +91,7 @@ void init_layout() {
 		next[out] += ZONES[z].count;
 		zone_stop[z] = next[out] - 1;
 		if (next[out] > output_offset[out] + OUTPUT_SIZES[out])
-			Serial.printf("Layout error: zone %d overflows output %d\n", z, out);
+			Serial.printf("Layout error: zone %d overflows output %d\r\n", z, out);
 	}
 
 	for (const FixtureDef& def : FIXTURES) {
@@ -160,7 +159,7 @@ uint8_t add_segment(Fixture& f, uint8_t n, Range range, uint8_t mode, uint8_t fl
 	}
 
 	if (n >= max_num_seg) {
-		Serial.printf("Too many segments, max %d\n", max_num_seg);
+		Serial.printf("Too many segments, max %d\r\n", max_num_seg);
 		return n;
 	}
 
@@ -322,19 +321,61 @@ uint16_t read_dip_address() {
 	return address;
 }
 
-// Same animation on every fixture, used at boot and in test mode
-void play_on_all(uint8_t mode, uint16_t speed, uint8_t bright) {
+// Same animation on every fixture, used at boot, in test mode and update mode
+void play_on_all(uint8_t mode, uint16_t speed, uint8_t bright, uint32_t color = 0xFF0000) {
 	for (Fixture& f : fixtures) {
 		reset_fx(f, LAYOUT_LEDS);
 		f.bright = bright;
+		f.color = color;
 		add_segment(f, 0, ALL, mode, 0);
 		f.fx->setSpeed(0, speed);
 		f.anim = 255; // restart the DMX animation when DMX comes back
+		f.letter_mode = false;
 	}
 }
 
+// LED feedback during a firmware update. Called from ota_loop() in DMX_task.
+void on_ota_event(OtaEvent event) {
+	xSemaphoreTake(fx_mutex, portMAX_DELAY);
+	if (event == OTA_UPLOAD_START)
+		play_on_all(FX_MODE_STATIC, 1000, 80, 0xFFC000); // yellow
+	else
+		play_on_all(FX_MODE_BREATH, 1000, 80, 0xFF0000); // red, update mode stays on
+	xSemaphoreGive(fx_mutex);
+
+	if (event == OTA_UPLOAD_START) {
+		vTaskDelay(50 / portTICK_PERIOD_MS); // let the yellow frame go out
+		leds_paused = true;
+	} else {
+		leds_paused = false;
+	}
+}
+
+void enter_ota(uint16_t dip) {
+	char name[32];
+	snprintf(name, sizeof(name), "%s-%03d", DEVICE_NAME, dip);
+	play_on_all(FX_MODE_BREATH, 1000, 80, 0x0040FF); // blue: waiting for a firmware
+	ota_begin(name, on_ota_event);
+}
+
+void leave_ota() {
+	ota_end();
+	leds_paused = false;
+	for (Fixture& f : fixtures)
+		f.anim = 255; // restart the DMX animation
+}
+
+// Fixture 1 at the update mode color (R=42 G=43 B=44) with dim at 0
+bool ota_requested(uint16_t dmx_adress) {
+	uint16_t base = dmx_adress + fixtures[0].def->dmx_offset;
+	return DMXLibrary::Read(base + DMX_CHANNEL_COLOR_1_R) == 42
+		&& DMXLibrary::Read(base + DMX_CHANNEL_COLOR_1_G) == 43
+		&& DMXLibrary::Read(base + DMX_CHANNEL_COLOR_1_B) == 44
+		&& DMXLibrary::Read(base + DMX_CHANNEL_BRIGHT) == 0;
+}
+
 void DMX_task(void* parameter) {
-	Serial.printf("Task DMX start\n");
+	Serial.printf("Task DMX start\r\n");
 	for (uint8_t pin : DIP_ADDRESS_PINS)
 		pinMode(pin, INPUT_PULLUP);
 	pinMode(DIP_PIN_9, INPUT_PULLUP); // unused
@@ -344,13 +385,13 @@ void DMX_task(void* parameter) {
 
 	delay(10);
 
-	Serial.printf("DMX start init\n");
+	Serial.printf("DMX start init\r\n");
 	DMXLibrary::Initialize(input);
 	#ifdef INVERT_RX
 		uart_set_line_inverse(2, UART_SIGNAL_RXD_INV);
 	#endif
 	Serial.println("DMX initialized...");
-	Serial.printf("Adress DMX: %d, %d fixture(s), %d channels\n", read_dip_address(), (int)fixtures.size(), max_dmx_channel);
+	Serial.printf("Adress DMX: %d, %d fixture(s), %d channels\r\n", read_dip_address(), (int)fixtures.size(), max_dmx_channel);
 
 	// boot animation, until DMX is received
 	xSemaphoreTake(fx_mutex, portMAX_DELAY);
@@ -360,14 +401,27 @@ void DMX_task(void* parameter) {
 	uint8_t ctn = 0;
 	uint8_t test_mode = 0;
 	enum { STATUS_NONE, STATUS_OK, STATUS_NO_SIGNAL, STATUS_BAD_ADDRESS } last_status = STATUS_NONE;
+	bool ota_holding = false;
+	unsigned long ota_hold_since = 0;
+	uint32_t dropped_logged = 0;
+	unsigned long dropped_log_time = 0;
 
 	for (;;) {
+		ota_loop();
 		uint16_t dip = read_dip_address();
 
+		// glitches on the DMX line: incomplete frames ignored by the DMX library
+		uint32_t dropped = DMXLibrary::DroppedFrames();
+		if (dropped != dropped_logged && millis() - dropped_log_time > 1000) {
+			Serial.printf("[DMX] %u incomplete frame(s) ignored (total %u)\r\n", dropped - dropped_logged, dropped);
+			dropped_logged = dropped;
+			dropped_log_time = millis();
+		}
+
 		xSemaphoreTake(fx_mutex, portMAX_DELAY);
-		if (dip == 0) { // test mode
+		if (dip == 0 && !ota_active()) { // test mode
 			if (test_mode == 0) {
-				Serial.printf("[TEST] DIP address is 0: rainbow test pattern\n");
+				Serial.printf("[TEST] DIP address is 0: rainbow test pattern\r\n");
 				last_status = STATUS_NONE;
 				play_on_all(FX_MODE_RAINBOW_CYCLE, 10, 50);
 				test_mode = 1;
@@ -383,19 +437,38 @@ void DMX_task(void* parameter) {
 
 			if (status != last_status) {
 				if (status == STATUS_OK)
-					Serial.printf("[DMX %03d] signal OK\n", dip);
+					Serial.printf("[DMX %03d] signal OK\r\n", dip);
 				else if (status == STATUS_NO_SIGNAL)
-					Serial.printf("[DMX %03d] no DMX signal\n", dip);
+					Serial.printf("[DMX %03d] no DMX signal\r\n", dip);
 				else
-					Serial.printf("[DMX %03d] address too high, max is %d\n", dip, TOTAL_CHANNELS - max_dmx_channel + 1);
+					Serial.printf("[DMX %03d] address too high, max is %d\r\n", dip, TOTAL_CHANNELS - max_dmx_channel + 1);
 				last_status = status;
 			}
 
 			if (status == STATUS_OK) {
 				digitalWrite(LED_STATUS_PIN, HIGH);
 				ctn = 0;
-				for (Fixture& f : fixtures)
-					apply_dmx(f, dmx_adress + f.def->dmx_offset);
+
+				if (ota_active()) {
+					if (!ota_requested(dmx_adress))
+						leave_ota();
+				} else if (ota_requested(dmx_adress)) {
+					if (!ota_holding) {
+						ota_holding = true;
+						ota_hold_since = millis();
+						Serial.printf("[OTA] update mode requested, hold for %d s\r\n", OTA_HOLD_MS / 1000);
+					} else if (millis() - ota_hold_since >= OTA_HOLD_MS) {
+						ota_holding = false;
+						enter_ota(dip);
+					}
+				} else {
+					ota_holding = false;
+				}
+
+				if (!ota_active()) {
+					for (Fixture& f : fixtures)
+						apply_dmx(f, dmx_adress + f.def->dmx_offset);
+				}
 			} else if (ctn++ > 10) {
 				digitalWrite(LED_STATUS_PIN, LOW);
 			}
@@ -407,7 +480,7 @@ void DMX_task(void* parameter) {
 }
 
 void led_task(void* parameter) {
-	Serial.printf("Task LED start\n");
+	Serial.printf("Task LED start\r\n");
 
 	add_outputs(leds, output_offset);
 
@@ -423,6 +496,8 @@ void led_task(void* parameter) {
 	pinMode(LED_STATUS_PIN, OUTPUT);
 	digitalWrite(LED_STATUS_PIN, LOW);
 
+	unsigned long last_frame = 0;
+
 	for (;;) {
 		xSemaphoreTake(fx_mutex, portMAX_DELAY);
 		unsigned long now = millis();
@@ -435,20 +510,26 @@ void led_task(void* parameter) {
 				leds_dirty = true;
 			}
 		}
-		if (leds_dirty) {
+
+		bool send = leds_dirty && !leds_paused && now - last_frame >= MIN_FRAME_MS;
+		if (send) {
 			for (Fixture& f : fixtures)
 				render(f);
-			FastLED.show();
 			leds_dirty = false;
+			last_frame = now;
 		}
 		xSemaphoreGive(fx_mutex);
+
+		// leds[] is only written by this task: send it without blocking the DMX task
+		if (send)
+			FastLED.show();
 		vTaskDelay(1 / portTICK_PERIOD_MS);
 	}
 }
 
 void setup() {
 	Serial.begin(115200);
-	Serial.printf("Start\n");
+	Serial.printf("Start\r\n");
 
 	init_layout();
 	fx_mutex = xSemaphoreCreateMutex();
