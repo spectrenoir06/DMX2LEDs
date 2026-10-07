@@ -35,18 +35,18 @@ enum Zone : uint8_t {
 };
 
 const ZoneDef ZONES[ZONE_COUNT] = {
-	// output, nb LEDs
-	{0, 85}, // F_BACK
-	{0, 70}, // O_BACK
-	{0, 75}, // L1_BACK
-	{0, 74}, // L2_BACK
-	{0, 95}, // E_BACK
+	// output, nb LEDs, name
+	{0, 85, "F_BACK"},
+	{0, 70, "O_BACK"},
+	{0, 75, "L1_BACK"},
+	{0, 74, "L2_BACK"},
+	{0, 95, "E_BACK"},
 
-	{1, 13}, // F_BULB
-	{1, 16}, // O_BULB
-	{1, 11}, // L1_BULB
-	{1, 11}, // L2_BULB
-	{1, 15}, // E_BULB
+	{1, 13, "F_BULB"},
+	{1, 16, "O_BULB"},
+	{1, 11, "L1_BULB"},
+	{1, 11, "L2_BULB"},
+	{1, 15, "E_BULB"},
 };
 
 // Ranges of consecutive zones, used by animations (see anims.h)

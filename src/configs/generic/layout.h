@@ -27,7 +27,7 @@ inline void add_outputs(CRGB* leds, const uint16_t* offset) {
 enum Zone : uint8_t { STRIP, ZONE_COUNT };
 
 const ZoneDef ZONES[ZONE_COUNT] = {
-	{0, LED_COUNT},
+	{0, LED_COUNT, "STRIP"},
 };
 
 const std::vector<FixtureDef> FIXTURES = {
@@ -55,8 +55,8 @@ inline void add_outputs(CRGB* leds, const uint16_t* offset) {
 enum Zone : uint8_t { OUT_1, OUT_2, OUT_3, OUT_4, OUT_5, OUT_6, OUT_7, OUT_8, ZONE_COUNT };
 
 const ZoneDef ZONES[ZONE_COUNT] = {
-	{0, LED_COUNT}, {1, LED_COUNT}, {2, LED_COUNT}, {3, LED_COUNT},
-	{4, LED_COUNT}, {5, LED_COUNT}, {6, LED_COUNT}, {7, LED_COUNT},
+	{0, LED_COUNT, "OUT_1"}, {1, LED_COUNT, "OUT_2"}, {2, LED_COUNT, "OUT_3"}, {3, LED_COUNT, "OUT_4"},
+	{4, LED_COUNT, "OUT_5"}, {5, LED_COUNT, "OUT_6"}, {6, LED_COUNT, "OUT_7"}, {7, LED_COUNT, "OUT_8"},
 };
 
 const std::vector<FixtureDef> FIXTURES = {

@@ -6,6 +6,7 @@
 // Only devices that joined the network (WPA2, OTA_PASSWORD) can upload, so
 // ArduinoOTA has no password of its own.
 #include "ota.h"
+#include "espnow_input.h"
 
 #include <WiFi.h>
 #include <WebServer.h>
@@ -76,7 +77,10 @@ void ota_begin(const char* network_name, void (*on_event)(OtaEvent)) {
 		return;
 	event_cb = on_event;
 
-	WiFi.mode(WIFI_AP);
+	// With ESP-NOW on, keep the station interface, which receives it. Both
+	// interfaces share one radio: the access point uses its default channel
+	// 1, the ESP-NOW channel (espnow_input.h).
+	WiFi.mode(espnow_enabled() ? WIFI_AP_STA : WIFI_AP);
 	WiFi.softAP(network_name, OTA_PASSWORD);
 	WiFi.softAPConfig(AP_IP, AP_IP, IPAddress(255, 255, 255, 0)); // short address, like WLED
 
@@ -109,7 +113,8 @@ void ota_end() {
 	ArduinoOTA.end();
 	server.stop();
 	WiFi.softAPdisconnect(true);
-	WiFi.mode(WIFI_OFF);
+	if (!espnow_enabled())
+		WiFi.mode(WIFI_OFF); // with ESP-NOW on, WiFi stays on for the receiver
 	active = false;
 	Serial.printf("[OTA] WiFi off\r\n");
 }

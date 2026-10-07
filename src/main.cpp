@@ -9,6 +9,8 @@
 #include "layout.h"
 #include "anims.h"
 #include "ota.h"
+#include <Preferences.h>
+#include "espnow_input.h"
 
 constexpr size_t NB_OUTPUTS = sizeof(OUTPUT_SIZES) / sizeof(OUTPUT_SIZES[0]);
 constexpr uint16_t sum(const uint16_t* a, size_t n) { return n == 0 ? 0 : a[n - 1] + sum(a, n - 1); }
@@ -16,6 +18,16 @@ constexpr uint16_t LED_NB_PIXEL = sum(OUTPUT_SIZES, NB_OUTPUTS);
 
 // Minimum time between two frames sent to the LEDs (100 fps max)
 #define MIN_FRAME_MS 10
+
+#ifndef SERIAL_BAUD
+#define SERIAL_BAUD 115200
+#endif
+
+// DMX anim channel values per animation: anim = value / ANIM_DMX_STEP.
+// 17 spreads 16 animations over 0-255; anims.h can change it.
+#ifndef ANIM_DMX_STEP
+#define ANIM_DMX_STEP 17
+#endif
 
 // WiFi update mode: fixture 1 at color R=42 G=43 B=44 with dim at 0, for
 // OTA_HOLD_MS. Changing any of these values leaves update mode.
@@ -199,12 +211,30 @@ void start_anim(Fixture& f) {
 	set_all_speed(f);
 }
 
+// ---- DMX input -----------------------------------------------------------
+// Wired DMX first, then DMX over ESP-NOW, then the WizMote remote (both only
+// when DIP switch 10 is ON at power-up, see espnow_input.cpp). The remote fills a DMX universe of its own at the board's
+// address, so everything downstream reads DMX the same way.
+enum DmxSource : uint8_t { SRC_NONE, SRC_WIRED, SRC_ESPNOW, SRC_REMOTE };
+static const char* const SOURCE_NAMES[] = {"none", "wired", "ESP-NOW", "remote"};
+DmxSource dmx_source = SRC_NONE;
+
+uint8_t remote_universe[TOTAL_CHANNELS + 1]; // [channel], built by remote_fill()
+
+uint8_t dmx_read(uint16_t channel) {
+	switch (dmx_source) {
+	case SRC_ESPNOW: return espnow_dmx_read(channel);
+	case SRC_REMOTE: return channel <= TOTAL_CHANNELS ? remote_universe[channel] : 0;
+	default:         return DMXLibrary::Read(channel);
+	}
+}
+
 // Letter mode, see FixtureDef::letters. Returns false when no letter channel is used.
 bool update_letters(Fixture& f, uint16_t dmx_base) {
 	bool active = false;
 	uint32_t zones_on = 0;
 	for (const Letter& l : f.def->letters) {
-		uint8_t value = DMXLibrary::Read(dmx_base + l.dmx_channel);
+		uint8_t value = dmx_read(dmx_base + l.dmx_channel);
 		if (value > 10)
 			active = true;
 		if (value > 127)
@@ -278,7 +308,7 @@ void apply_dmx(Fixture& f, uint16_t dmx_base) {
 	if (update_letters(f, dmx_base)) {
 		f.letter_mode = true;
 	} else {
-		int new_anim = DMXLibrary::Read(dmx_base + DMX_CHANNEL_ANIM) / 17; // 0-15
+		int new_anim = dmx_read(dmx_base + DMX_CHANNEL_ANIM) / ANIM_DMX_STEP;
 		if (new_anim != f.anim || f.letter_mode) {
 			f.anim = new_anim;
 			start_anim(f);
@@ -286,19 +316,19 @@ void apply_dmx(Fixture& f, uint16_t dmx_base) {
 		f.letter_mode = false;
 	}
 
-	uint8_t r = DMXLibrary::Read(dmx_base + DMX_CHANNEL_COLOR_1_R);
-	uint8_t g = DMXLibrary::Read(dmx_base + DMX_CHANNEL_COLOR_1_G);
-	uint8_t b = DMXLibrary::Read(dmx_base + DMX_CHANNEL_COLOR_1_B);
+	uint8_t r = dmx_read(dmx_base + DMX_CHANNEL_COLOR_1_R);
+	uint8_t g = dmx_read(dmx_base + DMX_CHANNEL_COLOR_1_G);
+	uint8_t b = dmx_read(dmx_base + DMX_CHANNEL_COLOR_1_B);
 	f.color = ((uint32_t)r << 16) | ((uint32_t)g << 8) | b;
 	f.fx->setAllColor(f.color);
 
-	uint8_t bright = DMXLibrary::Read(dmx_base + DMX_CHANNEL_BRIGHT);
+	uint8_t bright = dmx_read(dmx_base + DMX_CHANNEL_BRIGHT);
 	if (bright != f.bright) {
 		f.bright = bright;
 		leds_dirty = true;
 	}
 
-	uint8_t speed_channel = DMXLibrary::Read(dmx_base + DMX_CHANNEL_SPEED);
+	uint8_t speed_channel = dmx_read(dmx_base + DMX_CHANNEL_SPEED);
 	if (f.is_strobe) {
 		f.strobe_speed = 2550 - speed_channel * 10;
 	} else {
@@ -360,25 +390,110 @@ void enter_ota(uint16_t dip) {
 
 void leave_ota() {
 	ota_end();
+	if (espnow_enabled())
+		espnow_resume();
 	leds_paused = false;
 	for (Fixture& f : fixtures)
 		f.anim = 255; // restart the DMX animation
 }
 
+// ---- WizMote remote --------------------------------------------------------
+// 1 / 2: previous / next animation, 3: next color, 4: next speed,
+// bright up / down: dimmer, ON / OFF, night: dimmest.
+// Used when there is no DMX (wired or ESP-NOW), once a button has been
+// pressed. Settings are saved in flash REMOTE_SAVE_MS after the last press.
+#define REMOTE_SAVE_MS 2000
+
+static const uint32_t REMOTE_COLORS[] = {
+	0xFF7A00, 0xFF0000, 0xFFD000, 0x00FF00, 0x00E5FF, 0x0000FF, 0xFF00FF, 0xFFFFFF,
+};
+static const uint8_t REMOTE_SPEEDS[] = {40, 90, 128, 180, 230}; // DMX speed values
+static const uint8_t REMOTE_DIMS[] = {6, 9, 14, 22, 33, 50, 75, 113, 170, 255};
+#define COUNT(a) (sizeof(a) / sizeof(a[0]))
+
+struct RemoteState {
+	uint8_t anim = 0, color = 0, speed = 1, dim = COUNT(REMOTE_DIMS) - 1;
+	bool on = true;
+	bool used = false; // a button was pressed: the remote drives the board without DMX
+} remote;
+
+Preferences prefs;
+bool remote_dirty = false;
+unsigned long remote_changed = 0;
+
+void remote_load() {
+	prefs.begin("remote", false);
+	if (prefs.isKey("state") && prefs.getBytesLength("state") == sizeof(remote)) // none before the first press
+		prefs.getBytes("state", &remote, sizeof(remote));
+	remote.anim %= ANIMS.size();
+	remote.color %= COUNT(REMOTE_COLORS);
+	remote.speed %= COUNT(REMOTE_SPEEDS);
+	remote.dim %= COUNT(REMOTE_DIMS);
+}
+
+void remote_save_later() {
+	remote_dirty = true;
+	remote_changed = millis();
+}
+
+void remote_save_if_due() {
+	if (remote_dirty && millis() - remote_changed >= REMOTE_SAVE_MS) {
+		prefs.putBytes("state", &remote, sizeof(remote));
+		remote_dirty = false;
+	}
+}
+
+// Apply a button. Returns false when it is not a remote button.
+bool remote_button(int button) {
+	uint8_t n = ANIMS.size();
+	switch (button) {
+	case WIZMOTE_ONE:         remote.anim = (remote.anim + n - 1) % n; break;
+	case WIZMOTE_TWO:         remote.anim = (remote.anim + 1) % n; break;
+	case WIZMOTE_THREE:       remote.color = (remote.color + 1) % COUNT(REMOTE_COLORS); break;
+	case WIZMOTE_FOUR:        remote.speed = (remote.speed + 1) % COUNT(REMOTE_SPEEDS); break;
+	case WIZMOTE_BRIGHT_UP:   if (remote.dim < COUNT(REMOTE_DIMS) - 1) remote.dim++; remote.on = true; break;
+	case WIZMOTE_BRIGHT_DOWN: if (remote.dim > 0) remote.dim--; remote.on = true; break;
+	case WIZMOTE_NIGHT:       remote.dim = 0; remote.on = true; break;
+	case WIZMOTE_ON:          remote.on = true; break;
+	case WIZMOTE_OFF:         remote.on = false; break;
+	default:                  return false;
+	}
+	remote.used = true;
+	remote_save_later();
+	return true;
+}
+
+// The remote's settings as a DMX block for each fixture, at the DIP address
+void remote_fill(uint16_t dmx_adress) {
+	memset(remote_universe, 0, sizeof(remote_universe));
+	uint32_t c = REMOTE_COLORS[remote.color];
+	for (Fixture& f : fixtures) {
+		uint16_t base = dmx_adress + f.def->dmx_offset;
+		if (base + DMX_CHANNEL_ANIM > TOTAL_CHANNELS) // address too high, reported by DMX_task
+			continue;
+		remote_universe[base + DMX_CHANNEL_COLOR_1_R] = c >> 16;
+		remote_universe[base + DMX_CHANNEL_COLOR_1_G] = c >> 8;
+		remote_universe[base + DMX_CHANNEL_COLOR_1_B] = c;
+		remote_universe[base + DMX_CHANNEL_BRIGHT]    = remote.on ? REMOTE_DIMS[remote.dim] : 0;
+		remote_universe[base + DMX_CHANNEL_SPEED]     = REMOTE_SPEEDS[remote.speed];
+		remote_universe[base + DMX_CHANNEL_ANIM]      = remote.anim * ANIM_DMX_STEP;
+	}
+}
+
 // Fixture 1 at the update mode color (R=42 G=43 B=44) with dim at 0
 bool ota_requested(uint16_t dmx_adress) {
 	uint16_t base = dmx_adress + fixtures[0].def->dmx_offset;
-	return DMXLibrary::Read(base + DMX_CHANNEL_COLOR_1_R) == 42
-		&& DMXLibrary::Read(base + DMX_CHANNEL_COLOR_1_G) == 43
-		&& DMXLibrary::Read(base + DMX_CHANNEL_COLOR_1_B) == 44
-		&& DMXLibrary::Read(base + DMX_CHANNEL_BRIGHT) == 0;
+	return dmx_read(base + DMX_CHANNEL_COLOR_1_R) == 42
+		&& dmx_read(base + DMX_CHANNEL_COLOR_1_G) == 43
+		&& dmx_read(base + DMX_CHANNEL_COLOR_1_B) == 44
+		&& dmx_read(base + DMX_CHANNEL_BRIGHT) == 0;
 }
 
 void DMX_task(void* parameter) {
 	Serial.printf("Task DMX start\r\n");
 	for (uint8_t pin : DIP_ADDRESS_PINS)
 		pinMode(pin, INPUT_PULLUP);
-	pinMode(DIP_PIN_9, INPUT_PULLUP); // unused
+	pinMode(DIP_PIN_9, INPUT_PULLUP); // switch 10: ESP-NOW, read in setup()
 
 	pinMode(DMX_SERIAL_IO_PIN, OUTPUT);
 	digitalWrite(DMX_SERIAL_IO_PIN, 0);
@@ -413,6 +528,10 @@ void DMX_task(void* parameter) {
 			dropped_log_time = millis();
 		}
 
+		// DIP address 0 with switch 10 ON: test pattern + ESP-NOW pairing mode
+		espnow_set_pairing(dip == 0 && !ota_active());
+		espnow_poll();
+
 		xSemaphoreTake(fx_mutex, portMAX_DELAY);
 		if (dip == 0 && !ota_active()) { // test mode
 			if (test_mode == 0) {
@@ -424,11 +543,31 @@ void DMX_task(void* parameter) {
 		} else {
 			test_mode = 0;
 			uint16_t dmx_adress = dip - 1;
+			DmxSource source = DMXLibrary::IsHealthy() ? SRC_WIRED : SRC_NONE;
+			if (source == SRC_NONE && espnow_dmx_healthy()) // false with ESP-NOW off
+				source = SRC_ESPNOW;
+			for (int button; (button = espnow_take_button()) >= 0;) {
+				if (source != SRC_NONE)
+					Serial.printf("[REMOTE] button %d ignored: %s DMX has priority\r\n", button, SOURCE_NAMES[source]);
+				else if (remote_button(button))
+					Serial.printf("[REMOTE] button %d\r\n", button);
+			}
+			if (source == SRC_NONE && remote.used && espnow_enabled()) {
+				source = SRC_REMOTE;
+				remote_fill(dmx_adress);
+			}
+			remote_save_if_due();
 			auto status = STATUS_OK;
 			if (dmx_adress + max_dmx_channel > TOTAL_CHANNELS)
 				status = STATUS_BAD_ADDRESS;
-			else if (!DMXLibrary::IsHealthy())
+			else if (source == SRC_NONE)
 				status = STATUS_NO_SIGNAL;
+
+			if (source != dmx_source) {
+				if (source != SRC_NONE)
+					Serial.printf("[DMX %03d] input: %s\r\n", dip, SOURCE_NAMES[source]);
+				dmx_source = source;
+			}
 
 			if (status != last_status) {
 				if (status == STATUS_OK)
@@ -473,6 +612,74 @@ void DMX_task(void* parameter) {
 		vTaskDelay(25 / portTICK_PERIOD_MS);
 	}
 }
+
+// ---- LED preview (LED_PREVIEW) -------------------------------------------
+// Streams leds[] over the USB serial port, for scripts/led_view.py to draw
+// them on a PC. Binary frames are mixed with the text log:
+//   0xFE 'L' <length, uint16 little endian> <R G B of each LED, buffer order>
+// 0xFE never appears in the log. leds[] is before FastLED's color order, so
+// the colors are right whatever the output's GRB/RGB setting.
+// The layout is a text line, sent at boot and every PREVIEW_LAYOUT_MS for a
+// viewer started later:
+//   #LAYOUT <device> <output sizes> <zone name>:<output>:<nb LEDs> ...
+#ifdef LED_PREVIEW
+#define PREVIEW_FRAME_MS  33   // 30 fps max
+#define PREVIEW_LAYOUT_MS 2000
+#define PREVIEW_TX_BUFFER 4096 // a frame is queued without waiting for the UART
+
+static_assert(sizeof(leds) <= 0xFFFF, "LED preview frame length is 16 bit");
+
+void preview_layout() {
+	String line = "#LAYOUT " DEVICE_NAME " ";
+	for (size_t i = 0; i < NB_OUTPUTS; i++) {
+		if (i)
+			line += ',';
+		line += OUTPUT_SIZES[i];
+	}
+	for (uint8_t z = 0; z < ZONE_COUNT; z++) {
+		line += ' ';
+		if (ZONES[z].name)
+			line += ZONES[z].name;
+		else
+			line += "z" + String(z);
+		line += ':' + String(ZONES[z].output) + ':' + String(ZONES[z].count);
+	}
+	line += "\r\n";
+	Serial.print(line);
+}
+
+// One write() per frame: the UART driver holds its lock for the whole
+// buffer, so a log line from DMX_task can't land in the middle of it.
+void preview_frame() {
+	static uint8_t frame[4 + sizeof(leds)];
+	frame[0] = 0xFE;
+	frame[1] = 'L';
+	frame[2] = sizeof(leds) & 0xFF;
+	frame[3] = sizeof(leds) >> 8;
+	memcpy(frame + 4, leds, sizeof(leds));
+	Serial.write(frame, sizeof(frame));
+}
+
+// Called by led_task after each loop; new_frame when leds[] was just sent
+void preview_loop(bool new_frame) {
+	static bool pending = false;
+	static unsigned long last_frame = 0, last_layout = 0;
+	static bool layout_sent = false;
+	unsigned long now = millis();
+
+	if (!layout_sent || now - last_layout >= PREVIEW_LAYOUT_MS) {
+		preview_layout();
+		layout_sent = true;
+		last_layout = now;
+	}
+	pending |= new_frame;
+	if (pending && now - last_frame >= PREVIEW_FRAME_MS) {
+		preview_frame();
+		pending = false;
+		last_frame = now;
+	}
+}
+#endif
 
 void led_task(void* parameter) {
 	Serial.printf("Task LED start\r\n");
@@ -521,16 +728,37 @@ void led_task(void* parameter) {
 		// leds[] is only written by this task: send it without blocking the DMX task
 		if (send)
 			FastLED.show();
+#ifdef LED_PREVIEW
+		if (!leds_paused) // no frames during a firmware update either
+			preview_loop(send);
+#endif
 		vTaskDelay(1 / portTICK_PERIOD_MS);
 	}
 }
 
 void setup() {
-	Serial.begin(115200);
+#ifdef LED_PREVIEW
+	Serial.setTxBufferSize(PREVIEW_TX_BUFFER);
+#endif
+	Serial.begin(SERIAL_BAUD);
 	Serial.printf("Start\r\n");
 
 	init_layout();
 	fx_mutex = xSemaphoreCreateMutex();
+	// DIP switch 10 ON at power-up: DMX over ESP-NOW and the WizMote remote.
+	// WiFi runs on core 0, so the LED task (and the RMT interrupt refilling
+	// the LED data, set up on the core calling show()) then goes to core 1,
+	// where WiFi can't delay it and glitch the LEDs.
+	pinMode(DIP_PIN_9, INPUT_PULLUP);
+	delay(1);
+	bool espnow_on = !digitalRead(DIP_PIN_9); // ON pulls the pin low, like the address switches
+	if (espnow_on) {
+		remote_load();
+		espnow_begin();
+	} else {
+		Serial.printf("[ESP-NOW] off (DIP switch 10)\r\n");
+	}
+	uint8_t led_core = espnow_on ? 1 : 0;
 
 	xTaskCreatePinnedToCore(
 		led_task,    // Function that should be called
@@ -539,7 +767,7 @@ void setup() {
 		NULL,            // Parameter to pass
 		1,               // Task priority
 		NULL,             // Task handle
-		0          // Core you want to run the task on (0 or 1)
+		led_core // Core you want to run the task on (0 or 1)
 	);
 
 	xTaskCreatePinnedToCore(
@@ -549,7 +777,7 @@ void setup() {
 		NULL,            // Parameter to pass
 		1,               // Task priority
 		NULL,             // Task handle
-		1          // Core you want to run the task on (0 or 1)
+		1 - led_core // Core you want to run the task on (0 or 1)
 	);
 }
 

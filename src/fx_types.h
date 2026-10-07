@@ -20,8 +20,9 @@
 
 // Named group of consecutive LEDs on one output
 struct ZoneDef {
-	uint8_t  output;
-	uint16_t count;
+	uint8_t     output;
+	uint16_t    count;
+	const char* name; // optional, shown by the LED preview (scripts/led_view.py)
 };
 
 #define ZONE_BIT(z) (1UL << (z))
